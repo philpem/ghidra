@@ -182,3 +182,6 @@ ADDRIX: (imm16,X) is X; imm16     { addr:2 = imm16 + zext(X); tmp:2 = *:2 addr; 
     local result = A | op1;
     Z = result == 0;
 }
+
+@include "extra_bitops.sinc"
+

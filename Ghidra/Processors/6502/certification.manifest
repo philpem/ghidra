@@ -5,6 +5,7 @@ data/languages/6502.ldefs||GHIDRA||||END|
 data/languages/6502.pspec||GHIDRA||||END|
 data/languages/6502.slaspec||GHIDRA||||END|
 data/languages/65c02.slaspec||GHIDRA||||END|
+data/languages/extra_bitops.sinc||GHIDRA||||END|
 data/manuals/6502.idx||GHIDRA||||END|
 data/manuals/65c02.idx||GHIDRA||||END|
 src/main/java/ghidra/app/plugin/core/analysis/MOS6502IndirectJumpPageCrossingAnalyzer.java||GHIDRA||||END|
