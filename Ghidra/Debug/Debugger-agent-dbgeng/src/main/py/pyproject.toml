@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ghidradbg"
-version = "10.4"
+version = "11.1"
 authors = [
   { name="Ghidra Development Team" },
 ]
@@ -17,8 +17,8 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "ghidratrace==10.4",
-    "pybag>=2.2.8"
+    "ghidratrace==11.1",
+    "pybag>=2.2.10"
 ]
 
 [project.urls]
