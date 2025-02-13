@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -87,6 +87,8 @@ import resources.ResourceManager;
 
 public abstract class AbstractScreenShotGenerator extends AbstractGhidraHeadedIntegrationTest {
 
+	private static final String SCREENSHOT_USER_NAME = "User-1";
+
 	static {
 		System.setProperty("user.name", "User-1");
 	}
@@ -122,6 +124,13 @@ public abstract class AbstractScreenShotGenerator extends AbstractGhidraHeadedIn
 
 	@Before
 	public void setUp() throws Exception {
+
+		// sanity check to ensure out user name override above is still working
+		String path = getTestDirectoryPath();
+		assertTrue("Seeing this failure means that some call has initialized the temporary test " +
+			"directory before out static call to change user.name above",
+			path.contains(SCREENSHOT_USER_NAME));
+
 		env = newTestEnv();
 
 		prepareTool();
@@ -237,6 +246,7 @@ public abstract class AbstractScreenShotGenerator extends AbstractGhidraHeadedIn
 	public void performAction(String actionName, String owner, ComponentProvider contextProvider,
 			boolean wait) {
 		DockingActionIf action = getAction(tool, owner, actionName);
+		assertNotNull("Could not find action: " + actionName + " for owner " + owner, action);
 		performAction(action, contextProvider, wait);
 	}
 

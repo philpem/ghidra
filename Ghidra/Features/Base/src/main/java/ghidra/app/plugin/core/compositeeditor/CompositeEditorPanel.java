@@ -1201,13 +1201,12 @@ public abstract class CompositeEditorPanel extends JPanel
 		private void init() {
 
 			Plugin plugin = provider.getPlugin();
-			final PluginTool tool = plugin.getTool();
-			editor = new DataTypeSelectionEditor(tool,
-				bitfieldAllowed ? AllowedDataTypes.SIZABLE_DYNAMIC_AND_BITFIELD
+			PluginTool tool = plugin.getTool();
+			editor = new DataTypeSelectionEditor(model.getViewDataTypeManager(), tool,
+				bitfieldAllowed
+						? AllowedDataTypes.SIZABLE_DYNAMIC_AND_BITFIELD
 						: AllowedDataTypes.SIZABLE_DYNAMIC);
 			editor.setTabCommitsEdit(true);
-			DataTypeManager originalDataTypeManager = model.getOriginalDataTypeManager();
-			editor.setPreferredDataTypeManager(originalDataTypeManager);
 			editor.setConsumeEnterKeyPress(false); // we want the table to handle Enter key presses
 
 			textField = editor.getDropDownTextField();
@@ -1450,7 +1449,7 @@ public abstract class CompositeEditorPanel extends JPanel
 	 * list of traversal components.  Once one of the radio buttons is focused, the up and down 
 	 * arrow keys can be used to navigate the radio buttons.  With this traversal policy, pressing 
 	 * Tab when on these buttons will move to the next traversal component.
-	 * <P>
+	 *
 	 * @see #getFocusComponents()
 	 */
 	private class CompFocusTraversalPolicy extends FocusTraversalPolicy {

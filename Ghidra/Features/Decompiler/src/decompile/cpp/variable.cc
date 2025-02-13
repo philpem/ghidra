@@ -297,6 +297,27 @@ void HighVariable::transferPiece(HighVariable *tv2)
   tv2->highflags &= ~(uint4)(intersectdirty | extendcoverdirty);
 }
 
+/// Except in specific circumstances, convert \b type into its stripped form.
+void HighVariable::stripType(void) const
+
+{
+  if (!type->hasStripped())
+    return;
+  type_metatype meta = type->getMetatype();
+  if (meta == TYPE_PARTIALUNION || meta == TYPE_PARTIALSTRUCT) {
+    if (symbol != (Symbol *)0 && symboloffset != -1) {	// If there is a bigger backing symbol
+	type_metatype submeta = symbol->getType()->getMetatype();
+	if (submeta == TYPE_STRUCT || submeta == TYPE_UNION)
+	  return;			// Don't strip the partial union
+    }
+  }
+  else if (type->isEnumType()) {
+    if (inst.size() == 1 && inst[0]->isConstant())	// Only preserve partial enum on a constant
+      return;
+  }
+  type = type->getStripped();
+}
+
 /// Only update if the cover is marked as \e dirty.
 /// Merge the covers of all Varnode instances.
 void HighVariable::updateInternalCover(void) const
@@ -386,17 +407,7 @@ void HighVariable::updateType(void) const
   vn = getTypeRepresentative();
 
   type = vn->getType();
-  if (type->hasStripped()) {
-    if (type->getMetatype() == TYPE_PARTIALUNION) {
-      if (symbol != (Symbol *)0 && symboloffset != -1) {
-	type_metatype meta = symbol->getType()->getMetatype();
-	if (meta != TYPE_STRUCT && meta != TYPE_UNION)	// If partial union does not have a bigger backing symbol
-	  type = type->getStripped();			// strip the partial union
-      }
-    }
-    else
-      type = type->getStripped();
-  }
+  stripType();
 				// Update lock flags
   flags &= ~Varnode::typelock;
   if (vn->isTypeLock())
@@ -549,17 +560,7 @@ void HighVariable::finalizeDatatype(TypeFactory *typeFactory)
   if (tp == (Datatype *)0 || tp->getMetatype() == TYPE_UNKNOWN)
     return;
   type = tp;
-  if (type->hasStripped()) {
-    if (type->getMetatype() == TYPE_PARTIALUNION) {
-      if (symboloffset != -1) {
-	type_metatype meta = symbol->getType()->getMetatype();
-	if (meta != TYPE_STRUCT && meta != TYPE_UNION)	// If partial union does not have a bigger backing symbol
-	  type = type->getStripped();			// strip the partial union
-      }
-    }
-    else
-      type = type->getStripped();
-  }
+  stripType();
   highflags |= type_finalized;
 }
 

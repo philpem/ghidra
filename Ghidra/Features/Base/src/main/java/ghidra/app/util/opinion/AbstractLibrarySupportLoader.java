@@ -29,7 +29,6 @@ import org.apache.commons.lang3.ObjectUtils;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.ByteProvider;
-import ghidra.app.util.bin.FileBytesProvider;
 import ghidra.app.util.importer.*;
 import ghidra.formats.gfilesystem.*;
 import ghidra.framework.model.*;
@@ -101,9 +100,6 @@ public abstract class AbstractLibrarySupportLoader extends AbstractProgramLoader
 			// Load (or get) the primary program
 			Program program = null;
 			if (!shouldLoadOnlyLibraries(options)) {
-				if (provider instanceof FileBytesProvider) {
-					throw new LoadException("Cannot load an already loaded program");
-				}
 				program = doLoad(provider, loadedName, loadSpec, libraryNameList, options, consumer,
 					log, monitor);
 				loadedProgramList.add(new Loaded<>(program, loadedName, projectFolderPath));
@@ -662,7 +658,7 @@ public abstract class AbstractLibrarySupportLoader extends AbstractProgramLoader
 	 * <p>
 	 * If the library path has a path and it wasn't found under the given folder, the
 	 * filename part of library path will be used to search the given folder for matches.
-	 * <p>
+	 * 
 	 * @param libraryPath path with filename of the library to find
 	 * @param folder {@link DomainFolder} within which imported libraries will be searched.
 	 *   If null this method will return null.
@@ -719,7 +715,7 @@ public abstract class AbstractLibrarySupportLoader extends AbstractProgramLoader
 	 * <p>
 	 * If the library specifies an absolute path, its native path is searched on the local 
 	 * filesystem.
-	 * <p>
+	 * 
 	 * @param libraryPath The library {@link Path}.  This will be either an absolute path, a
 	 *   relative path, or just a filename.
 	 * @param fsSearchPaths A {@link List} of {@link FileSystemSearchPath}s that will be searched
@@ -1181,27 +1177,20 @@ public abstract class AbstractLibrarySupportLoader extends AbstractProgramLoader
 	 */
 	protected FSRL resolveLibraryFile(GFileSystem fs, Path libraryParentPath, String libraryName)
 			throws IOException {
-		GFile libraryParentDir = fs.lookup(
-			libraryParentPath != null ? FilenameUtils.separatorsToUnix(libraryParentPath.toString())
-					: null);
-		boolean compareWithoutExtension = isOptionalLibraryFilenameExtensions() &&
-			FilenameUtils.getExtension(libraryName).equals("");
-		if (libraryParentDir != null) {
-			Comparator<String> libNameComparator = getLibraryNameComparator();
-			for (GFile file : fs.getListing(libraryParentDir)) {
-				if (file.isDirectory()) {
-					continue;
-				}
-				String compareName = file.getName();
-				if (compareWithoutExtension) {
-					compareName = FilenameUtils.getBaseName(compareName);
-				}
-				if (libNameComparator.compare(libraryName, compareName) == 0) {
-					return file.getFSRL();
-				}
-			}
-		}
-		return null;
+		String lpp = libraryParentPath != null 
+				? FilenameUtils.separatorsToUnix(libraryParentPath.toString())
+				: null;
+		String targetPath = FSUtilities.appendPath(lpp, libraryName);
+
+		Comparator<String> baseNameComp = getLibraryNameComparator();
+		Comparator<String> nameComp = isOptionalLibraryFilenameExtensions() &&
+			FilenameUtils.getExtension(libraryName).isEmpty()
+					? (s1, s2) -> baseNameComp.compare(FilenameUtils.getBaseName(s1),
+						FilenameUtils.getBaseName(s2))
+					: baseNameComp;
+
+		GFile foundFile = fs.lookup(targetPath, nameComp);
+		return foundFile != null && !foundFile.isDirectory() ? foundFile.getFSRL() : null;
 	}
 
 	/**

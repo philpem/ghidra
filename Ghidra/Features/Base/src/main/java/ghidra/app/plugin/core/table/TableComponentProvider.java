@@ -138,8 +138,8 @@ public class TableComponentProvider<T> extends ComponentProviderAdapter
 
 		if (navigatable != null) {
 			// Only allow global actions if we are derived from the connect/primary navigatable.  
-			// This allows the the primary navigatable to process key events without the user having
-			// to focus first focus the primary navigatable.
+			// This allows the primary navigatable to process key events without the user having
+			// to first focus the primary navigatable.
 			table.setActionsEnabled(navigatable.isConnected());
 			navigatable.addNavigatableListener(this);
 			table.installNavigation(tool, navigatable);
@@ -160,6 +160,13 @@ public class TableComponentProvider<T> extends ComponentProviderAdapter
 	private void createActions(Plugin plugin) {
 
 		GhidraTable table = threadedPanel.getTable();
+
+		// The name of this provider is specified by the clients of the service and it is expected 
+		// to be something like 'Search Results'.  The title is also from the client and is expected
+		// to be something like 'Search Text "foo"'
+		table.setAccessibleNamePrefix(getName());
+		table.getAccessibleContext().setAccessibleDescription("Provider title: " + getTitle());
+
 		if (navigatable != null) {
 			selectAction =
 				new MakeProgramSelectionAction(navigatable, tableServicePlugin.getName(), table);
@@ -174,7 +181,7 @@ public class TableComponentProvider<T> extends ComponentProviderAdapter
 		selectionNavigationAction
 				.setHelpLocation(new HelpLocation(HelpTopics.SEARCH, "Selection_Navigation"));
 
-		externalGotoAction = new DockingAction("Go to External Location", getName()) {
+		externalGotoAction = new DockingAction("Go to External Location", getOwner()) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				gotoExternalAddress(getSelectedExternalAddress());

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,7 +34,6 @@ import ghidra.program.model.lang.Register;
  * Can only specify offset from register for framebase and stack relative<br>
  * <p>
  * Result can be a numeric value (ie. static address) or a register 'name' or a stack based offset.
- * <p>
  */
 public class DWARFExpressionEvaluator {
 
@@ -121,7 +120,7 @@ public class DWARFExpressionEvaluator {
 	 * <p>
 	 * Note, you should check {@link #isDeref()} to see if the register is just a pointer
 	 * to the object instead of the object itself.
-	 * <p>
+	 * 
 	 * @return
 	 */
 	public Register getTerminalRegister() {
@@ -249,7 +248,7 @@ public class DWARFExpressionEvaluator {
 			// Retrieve value held in register X and add offset from operand and push result on stack.
 			// Fake it using zero as register value.
 			// Mainly only useful if offset is zero or if non-zero the register happens to
-			// be the the stack pointer.
+			// be the stack pointer.
 			long offset = currentOp.getOperandValue(0);
 			push(0 /*fake register value */ + offset);
 			lastRegister = currentOp.getRelativeOpCodeOffset(DW_OP_breg0);

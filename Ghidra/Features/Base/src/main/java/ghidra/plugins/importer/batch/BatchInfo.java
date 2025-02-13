@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -174,10 +174,10 @@ public class BatchInfo {
 	 * <p>
 	 * If the file is a container for other files, this method will iterate through those
 	 * child files and recursively try to add them using this method.
-	 * <p>
+	 * 
 	 * @param fsrl {@link FSRL} of the file to add.
 	 * @param taskMonitor {@link TaskMonitor} to watch and update with progress.
-	 * @return boolean true if something in the the file produced something to import.
+	 * @return boolean true if something in the file produced something to import.
 	 * @throws IOException if io error when reading files.
 	 * @throws CancelledException if user cancels.
 	 */
@@ -207,10 +207,10 @@ public class BatchInfo {
 	 * <p>
 	 * The file is probed for high-priority filesystems first, then if no matches,
 	 * Ghidra loaders, and then if no matches, all filesystems.
-	 * <p>
+	 * 
 	 * @param fsrl {@link FSRL} of the file to probe and process
 	 * @param taskMonitor {@link TaskMonitor} to watch and update.
-	 * @return boolean true if something in the the file produced something to import.
+	 * @return boolean true if something in the file produced something to import.
 	 * @throws IOException if io error when reading files.
 	 * @throws CancelledException if user cancels.
 	 */
@@ -421,7 +421,7 @@ public class BatchInfo {
 	 * <p>
 	 * Doing this requires rescanning all original user-added source files and stopping
 	 * at the new max depth.
-	 * <p>
+	 * 
 	 * @param newMaxDepth new value for the max depth
 	 */
 	public void setMaxDepth(int newMaxDepth) {

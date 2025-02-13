@@ -27,6 +27,7 @@ from pybag.dbgeng.callbacks import EventHandler
 from pybag.dbgeng.idebugbreakpoint import DebugBreakpoint
 
 from . import commands, util
+from .exdi import exdi_commands
 
 
 ALL_EVENTS = 0xFFFF
@@ -65,6 +66,8 @@ class ProcessState(object):
         if first:
             if util.is_kernel():
                 commands.create_generic("Sessions")
+            if util.is_exdi() and util.dbg.use_generics is False:
+                commands.create_generic("Sessions[0].ExdiProcesses")
             commands.put_processes()
             commands.put_environment()
             commands.put_threads()
@@ -77,8 +80,8 @@ class ProcessState(object):
                 commands.putreg()
                 commands.putmem('0x{:x}'.format(util.get_pc()),
                                 "1", display_result=False)
-                commands.putmem('0x{:x}'.format(util.get_sp()),
-                                "1", display_result=False)
+                commands.putmem('0x{:x}'.format(util.get_sp()-1),
+                                "2", display_result=False)
                 commands.put_frames()
                 self.visited.add(thread)
             frame = util.selected_frame()
@@ -86,9 +89,13 @@ class ProcessState(object):
             if first or hashable_frame not in self.visited:
                 self.visited.add(hashable_frame)
         if first or self.regions:
+            if util.is_exdi():
+                exdi_commands.put_regions_exdi(commands.STATE)
             commands.put_regions()
             self.regions = False
         if first or self.modules:
+            if util.is_exdi():
+                exdi_commands.put_kmodules_exdi(commands.STATE)
             commands.put_modules()
             self.modules = False
         if first or self.breaks:
@@ -155,7 +162,7 @@ def log_errors(func):
 
 @log_errors
 def on_state_changed(*args):
-    # print("ON_STATE_CHANGED")
+	# print("ON_STATE_CHANGED")
     # print(args)
     if args[0] == DbgEng.DEBUG_CES_CURRENT_THREAD:
         return on_thread_selected(args)
@@ -169,7 +176,7 @@ def on_state_changed(*args):
         proc = util.selected_process()
         if args[1] & DbgEng.DEBUG_STATUS_INSIDE_WAIT:
             if proc in PROC_STATE:
-                # Process may have exited (so deleted) first
+				# Process may have exited (so deleted) first
                 PROC_STATE[proc].waiting = True
             return S_OK
         if proc in PROC_STATE:
@@ -475,28 +482,45 @@ def on_exception(*args):
 
 @util.dbg.eng_thread
 def install_hooks():
-    # print("Installing hooks")
-    if HOOK_STATE.installed:
-        return
-    HOOK_STATE.installed = True
+	# print("Installing hooks")
+	if HOOK_STATE.installed:
+		return
+	HOOK_STATE.installed = True
 
-    events = util.dbg._base.events
+	events = util.dbg._base.events
+   
+	if util.is_remote():
+		events.engine_state(handler=on_state_changed_async)
+		events.debuggee_state(handler=on_debuggee_changed_async)
+		events.session_status(handler=on_session_status_changed_async)
+		events.symbol_state(handler=on_symbol_state_changed_async)
+		events.system_error(handler=on_system_error_async)
 
-    events.engine_state(handler=on_state_changed)
-    events.debuggee_state(handler=on_debuggee_changed)
-    events.session_status(handler=on_session_status_changed)
-    events.symbol_state(handler=on_symbol_state_changed)
-    events.system_error(handler=on_system_error)
+		events.create_process(handler=on_new_process_async)
+		events.exit_process(handler=on_process_deleted_async)
+		events.create_thread(handler=on_threads_changed_async)
+		events.exit_thread(handler=on_threads_changed_async)
+		events.module_load(handler=on_modules_changed_async)
+		events.unload_module(handler=on_modules_changed_async)
 
-    events.create_process(handler=on_new_process)
-    events.exit_process(handler=on_process_deleted)
-    events.create_thread(handler=on_threads_changed)
-    events.exit_thread(handler=on_threads_changed)
-    events.module_load(handler=on_modules_changed)
-    events.unload_module(handler=on_modules_changed)
+		events.breakpoint(handler=on_breakpoint_hit_async)
+		events.exception(handler=on_exception_async)
+	else:
+		events.engine_state(handler=on_state_changed)
+		events.debuggee_state(handler=on_debuggee_changed)
+		events.session_status(handler=on_session_status_changed)
+		events.symbol_state(handler=on_symbol_state_changed)
+		events.system_error(handler=on_system_error)
 
-    events.breakpoint(handler=on_breakpoint_hit)
-    events.exception(handler=on_exception)
+		events.create_process(handler=on_new_process)
+		events.exit_process(handler=on_process_deleted)
+		events.create_thread(handler=on_threads_changed)
+		events.exit_thread(handler=on_threads_changed)
+		events.module_load(handler=on_modules_changed)
+		events.unload_module(handler=on_modules_changed)
+
+		events.breakpoint(handler=on_breakpoint_hit)
+		events.exception(handler=on_exception)
 
 
 @util.dbg.eng_thread
@@ -520,3 +544,59 @@ def disable_current_process():
     if proc in PROC_STATE:
         # Silently ignore already disabled
         del PROC_STATE[proc]
+
+
+@log_errors
+def on_state_changed_async(*args):
+	util.dbg.run_async(on_state_changed, *args)
+
+
+@log_errors
+def on_debuggee_changed_async(*args):
+	util.dbg.run_async(on_debuggee_changed, *args)
+
+
+@log_errors
+def on_session_status_changed_async(*args):
+	util.dbg.run_async(on_session_status_changed, *args)
+
+
+@log_errors
+def on_symbol_state_changed_async(*args):
+	util.dbg.run_async(on_symbol_state_changed, *args)
+
+
+@log_errors
+def on_system_error_async(*args):
+	util.dbg.run_async(on_system_error, *args)
+
+
+@log_errors
+def on_new_process_async(*args):
+	util.dbg.run_async(on_new_process, *args)
+
+
+@log_errors
+def on_process_deleted_async(*args):
+	util.dbg.run_async(on_process_deleted, *args)
+
+
+@log_errors
+def on_threads_changed_async(*args):
+	util.dbg.run_async(on_threads_changed, *args)
+
+
+@log_errors
+def on_modules_changed_async(*args):
+	util.dbg.run_async(on_modules_changed, *args)
+
+
+@log_errors
+def on_breakpoint_hit_async(*args):
+	util.dbg.run_async(on_breakpoint_hit, *args)
+
+
+@log_errors
+def on_exception_async(*args):
+	util.dbg.run_async(on_exception, *args)
+

@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,22 +18,23 @@ package ghidra.debug.api.target;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
-import java.util.function.BooleanSupplier;
-import java.util.function.Function;
+
+import javax.swing.Icon;
 
 import docking.ActionContext;
-import ghidra.dbg.target.TargetExecutionStateful.TargetExecutionState;
+import ghidra.debug.api.target.ActionName.Show;
 import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.lang.RegisterValue;
 import ghidra.trace.model.Trace;
+import ghidra.trace.model.TraceExecutionState;
 import ghidra.trace.model.breakpoint.TraceBreakpoint;
 import ghidra.trace.model.breakpoint.TraceBreakpointKind;
 import ghidra.trace.model.guest.TracePlatform;
 import ghidra.trace.model.memory.TraceMemoryState;
 import ghidra.trace.model.stack.TraceStackFrame;
-import ghidra.trace.model.target.TraceObjectKeyPath;
+import ghidra.trace.model.target.path.KeyPath;
 import ghidra.trace.model.thread.TraceThread;
 import ghidra.util.Swing;
 import ghidra.util.exception.CancelledException;
@@ -58,28 +59,72 @@ public interface Target {
 	 * just invoked implicitly. Often, the two suppliers are implemented using lambda functions, and
 	 * those functions will keep whatever some means of querying UI and/or target context in their
 	 * closures.
-	 * 
-	 * @param display the text to display on UI actions associated with this entry
-	 * @param name the name of a common debugger command this action implements
-	 * @param details text providing more details, usually displayed in a tool tip
-	 * @param requiresPrompt true if invoking the action requires further user interaction
-	 * @param specificity a relative score of specificity. These are only meaningful when compared
-	 *            among entries returned in the same collection.
-	 * @param enabled a supplier to determine whether an associated action in the UI is enabled.
-	 * @param action a function for invoking this action asynchronously
 	 */
-	record ActionEntry(String display, ActionName name, String details, boolean requiresPrompt,
-			long specificity, BooleanSupplier enabled,
-			Function<Boolean, CompletableFuture<?>> action) {
+	interface ActionEntry {
+
+		/**
+		 * Get the text to display on UI actions associated with this entry
+		 * 
+		 * @return the display
+		 */
+		String display();
+
+		/**
+		 * Get the name of a common debugger command this action implements
+		 * 
+		 * @return the name
+		 */
+		ActionName name();
+
+		/**
+		 * Get the icon to display in menus and dialogs
+		 * 
+		 * @return the icon
+		 */
+		Icon icon();
+
+		/**
+		 * Get the text providing more details, usually displayed in a tool tip
+		 * 
+		 * @return the details
+		 */
+		String details();
+
+		/**
+		 * Check whether invoking the action requires further user interaction
+		 * 
+		 * @return true if prompting is required
+		 */
+		boolean requiresPrompt();
+
+		/**
+		 * Get a relative score of specificity.
+		 * 
+		 * <p>
+		 * These are only meaningful when compared among entries returned in the same collection.
+		 * 
+		 * @return the specificity
+		 */
+		long specificity();
+
+		/**
+		 * Invoke the action asynchronously, prompting if desired.
+		 * 
+		 * <p>
+		 * The implementation is not required to provide a timeout; however, downstream components
+		 * may.
+		 * 
+		 * @param prompt whether or not to prompt the user for arguments
+		 * @return the future result, often {@link Void}
+		 */
+		CompletableFuture<?> invokeAsyncWithoutTimeout(boolean prompt);
 
 		/**
 		 * Check if this action is currently enabled
 		 * 
 		 * @return true if enabled
 		 */
-		public boolean isEnabled() {
-			return enabled.getAsBoolean();
-		}
+		boolean isEnabled();
 
 		/**
 		 * Invoke the action asynchronously, prompting if desired
@@ -90,8 +135,9 @@ public interface Target {
 		 * @param prompt whether or not to prompt the user for arguments
 		 * @return the future result, often {@link Void}
 		 */
-		public CompletableFuture<?> invokeAsync(boolean prompt) {
-			return action.apply(prompt).orTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+		default CompletableFuture<?> invokeAsync(boolean prompt) {
+			return invokeAsyncWithoutTimeout(prompt).orTimeout(TIMEOUT_MILLIS,
+				TimeUnit.MILLISECONDS);
 		}
 
 		/**
@@ -103,7 +149,7 @@ public interface Target {
 		 * 
 		 * @param prompt whether or not to prompt the user for arguments
 		 */
-		public void run(boolean prompt) {
+		default void run(boolean prompt) {
 			get(prompt);
 		}
 
@@ -113,7 +159,7 @@ public interface Target {
 		 * @param prompt whether or not to prompt the user for arguments
 		 * @return the resulting value, if applicable
 		 */
-		public Object get(boolean prompt) {
+		default Object get(boolean prompt) {
 			if (Swing.isSwingThread()) {
 				throw new AssertionError("Refusing to block the Swing thread. Use a Task.");
 			}
@@ -130,8 +176,8 @@ public interface Target {
 		 * 
 		 * @return true if built in.
 		 */
-		public boolean builtIn() {
-			return name != null && name.builtIn();
+		default Show getShow() {
+			return name() == null ? Show.EXTENDED : name().show();
 		}
 	}
 
@@ -196,7 +242,7 @@ public interface Target {
 	 * @param path the path of the object
 	 * @return the thread, or null
 	 */
-	TraceThread getThreadForSuccessor(TraceObjectKeyPath path);
+	TraceThread getThreadForSuccessor(KeyPath path);
 
 	/**
 	 * Get the execution state of the given thread
@@ -204,7 +250,7 @@ public interface Target {
 	 * @param thread the thread
 	 * @return the state
 	 */
-	TargetExecutionState getThreadExecutionState(TraceThread thread);
+	TraceExecutionState getThreadExecutionState(TraceThread thread);
 
 	/**
 	 * Get the trace stack frame that contains the given object
@@ -212,7 +258,7 @@ public interface Target {
 	 * @param path the path of the object
 	 * @return the stack frame, or null
 	 */
-	TraceStackFrame getStackFrameForSuccessor(TraceObjectKeyPath path);
+	TraceStackFrame getStackFrameForSuccessor(KeyPath path);
 
 	/**
 	 * Check if the target supports synchronizing focus
@@ -226,7 +272,7 @@ public interface Target {
 	 * 
 	 * @return the focused object's path, or null
 	 */
-	TraceObjectKeyPath getFocus();
+	KeyPath getFocus();
 
 	/**
 	 * @see #activate(DebuggerCoordinates, DebuggerCoordinates)

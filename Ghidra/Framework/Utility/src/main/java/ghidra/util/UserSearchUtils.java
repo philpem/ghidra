@@ -230,7 +230,6 @@ public class UserSearchUtils {
 	 * <b>match exactly</b> the given input string.
 	 * <p>
 	 * This method can be used with {@link Matcher#matches()} or {@link Matcher#find()}.
-	 * <p>
 	 *
 	 * @param input
 	 * 			the string that you want to your matched strings to exactly match.
@@ -261,7 +260,6 @@ public class UserSearchUtils {
 	 * all strings that match the given input string.
 	 * <p>
 	 * This method can be used with {@link Matcher#matches()} or {@link Matcher#find()}.
-	 * <p>
 	 *
 	 * @param input
 	 * 			the string that you want to your matched strings to exactly match.
@@ -309,8 +307,8 @@ public class UserSearchUtils {
 		if (allowGlobbing) {
 
 			// Note: Order is important! (due to how escape characters added and checked)
-			escaped = escapeEscapeCharacters(input);
-			escaped = escapeNonGlobbingRegexCharacters(input);
+			escaped = escapeEscapeCharacters(escaped);
+			escaped = escapeNonGlobbingRegexCharacters(escaped);
 			escaped = convertGlobbingCharactersToRegex(escaped);
 		}
 		else {

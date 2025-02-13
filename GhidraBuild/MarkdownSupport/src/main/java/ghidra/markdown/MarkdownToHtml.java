@@ -60,8 +60,8 @@ public class MarkdownToHtml {
 				.build();
 
 		// Create output directory (if necessary)
-		File inFile = new File(args[0]);
-		File outFile = new File(args[1]);
+		File inFile = new File(args[0]).getCanonicalFile();
+		File outFile = new File(args[1]).getCanonicalFile();
 		if (!outFile.getParentFile().isDirectory() && !outFile.getParentFile().mkdirs()) {
 			throw new Exception("Failed to create: " + outFile.getParent());
 		}
@@ -87,10 +87,41 @@ public class MarkdownToHtml {
 		@Override
 		public void setAttributes(Node node, String tagName, Map<String, String> attributes) {
 			if (node instanceof Link) {
-				String href = attributes.get("href");
-				if (href != null && !href.startsWith("#") && href.toLowerCase().endsWith(".md")) {
-					attributes.put("href", href.substring(0, href.length() - 2) + "html");
-				}
+				fixupLinks(attributes);
+			}
+		}
+
+		private void fixupLinks(Map<String, String> attributes) {
+			String href = attributes.get("href");
+
+			// Ignore local anchor links
+			if (href == null || href.startsWith("#")) {
+				return;
+			}
+
+			// Ignore fully qualified URL's
+			if (href.toLowerCase().startsWith("http://") ||
+				href.toLowerCase().startsWith("https://")) {
+				return;
+			}
+
+			// Convert .md links to .html links
+			if (href.toLowerCase().endsWith(".md")) {
+				href = href.substring(0, href.length() - 2) + "html";
+			}
+
+			// Fixup known differences between repository link and release links
+			href = switch (href) {
+				case String s when s.contains("src/main/py") -> s.replace("src/main/py", "pypkg");
+				case String s when s.contains("src/main/java") -> null;
+				default -> href;
+			};
+
+			if (href != null) {
+				attributes.put("href", href);
+			}
+			else {
+				attributes.remove("href");
 			}
 		}
 	}

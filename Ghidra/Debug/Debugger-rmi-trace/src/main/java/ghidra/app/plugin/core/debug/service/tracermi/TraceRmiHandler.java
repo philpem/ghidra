@@ -31,19 +31,14 @@ import org.apache.commons.lang3.ArrayUtils;
 import com.google.protobuf.ByteString;
 
 import db.Transaction;
+import generic.theme.GIcon;
 import ghidra.app.plugin.core.debug.disassemble.DebuggerDisassemblerPlugin;
 import ghidra.app.plugin.core.debug.disassemble.TraceDisassembleCommand;
 import ghidra.app.services.DebuggerControlService;
 import ghidra.app.services.DebuggerTraceManagerService;
-import ghidra.app.services.DebuggerTraceManagerService.ActivationCause;
-import ghidra.dbg.target.schema.TargetObjectSchema.SchemaName;
-import ghidra.dbg.target.schema.XmlSchemaContext;
-import ghidra.dbg.util.PathPattern;
-import ghidra.dbg.util.PathUtils;
 import ghidra.debug.api.progress.CloseableTaskMonitor;
 import ghidra.debug.api.target.ActionName;
 import ghidra.debug.api.target.Target;
-import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.debug.api.tracermi.*;
 import ghidra.framework.Application;
 import ghidra.framework.model.*;
@@ -62,13 +57,16 @@ import ghidra.trace.model.guest.TracePlatform;
 import ghidra.trace.model.memory.*;
 import ghidra.trace.model.target.*;
 import ghidra.trace.model.target.TraceObject.ConflictResolution;
+import ghidra.trace.model.target.path.*;
+import ghidra.trace.model.target.schema.TraceObjectSchema.SchemaName;
+import ghidra.trace.model.target.schema.XmlSchemaContext;
 import ghidra.trace.model.time.TraceSnapshot;
 import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateFileException;
 
-public class TraceRmiHandler implements TraceRmiConnection {
-	public static final String VERSION = "11.2";
+public class TraceRmiHandler extends AbstractTraceRmiConnection {
+	public static final String VERSION = "11.3";
 
 	protected static class VersionMismatchError extends TraceRmiError {
 		public VersionMismatchError(String remote) {
@@ -654,12 +652,12 @@ public class TraceRmiHandler implements TraceRmiConnection {
 				.getCompilerSpecByID(new CompilerSpecID(compiler.getId()));
 	}
 
-	protected static TraceObjectKeyPath toKeyPath(ObjPath path) {
-		return TraceObjectKeyPath.parse(path.getPath());
+	protected static KeyPath toKeyPath(ObjPath path) {
+		return KeyPath.parse(path.getPath());
 	}
 
 	protected static PathPattern toPathPattern(ObjPath path) {
-		return new PathPattern(PathUtils.parse(path.getPath()));
+		return PathFilter.parse(path.getPath());
 	}
 
 	protected static Lifespan toLifespan(Span span) {
@@ -688,7 +686,7 @@ public class TraceRmiHandler implements TraceRmiConnection {
 		return ObjSpec.newBuilder().setId(object.getKey()).build();
 	}
 
-	protected static ObjPath makeObjPath(TraceObjectKeyPath path) {
+	protected static ObjPath makeObjPath(KeyPath path) {
 		return ObjPath.newBuilder().setPath(path.toString()).build();
 	}
 
@@ -817,42 +815,25 @@ public class TraceRmiHandler implements TraceRmiConnection {
 		return makeArgument(ent.getKey(), ent.getValue());
 	}
 
-	protected boolean followsPresent(Trace trace) {
-		DebuggerControlService controlService = this.controlService;
-		if (controlService == null) {
-			return true;
-		}
-		return controlService.getCurrentMode(trace).followsPresent();
+	@Override
+	protected DebuggerTraceManagerService getTraceManager() {
+		return this.traceManager;
+	}
+
+	@Override
+	protected DebuggerControlService getControlService() {
+		return this.controlService;
+	}
+
+	@Override
+	protected boolean ownsTrace(Trace trace) {
+		return openTraces.getByTrace(trace) != null;
 	}
 
 	protected ReplyActivate handleActivate(RequestActivate req) {
 		OpenTrace open = requireOpenTrace(req.getOid());
 		TraceObject object = open.getObject(req.getObject(), false);
-		DebuggerCoordinates coords = traceManager.getCurrent();
-		if (coords.getTrace() != open.trace) {
-			coords = DebuggerCoordinates.NOWHERE;
-		}
-		if (open.lastSnapshot != null && followsPresent(open.trace)) {
-			coords = coords.snap(open.lastSnapshot.getKey());
-		}
-		DebuggerCoordinates finalCoords = object == null ? coords : coords.object(object);
-		Swing.runLater(() -> {
-			DebuggerTraceManagerService traceManager = this.traceManager;
-			if (traceManager == null) {
-				// Can happen during tear down.
-				return;
-			}
-			if (!traceManager.getOpenTraces().contains(open.trace)) {
-				traceManager.openTrace(open.trace);
-				traceManager.activate(finalCoords, ActivationCause.SYNC_MODEL);
-			}
-			else {
-				Trace currentTrace = traceManager.getCurrentTrace();
-				if (currentTrace == null || openTraces.getByTrace(currentTrace) != null) {
-					traceManager.activate(finalCoords, ActivationCause.SYNC_MODEL);
-				}
-			}
-		});
+		doActivate(object, open.trace, open.lastSnapshot);
 		return ReplyActivate.getDefaultInstance();
 	}
 
@@ -1047,7 +1028,9 @@ public class TraceRmiHandler implements TraceRmiConnection {
 		}
 		for (Method m : req.getMethodsList()) {
 			RemoteMethod rm = new RecordRemoteMethod(this, m.getName(),
-				ActionName.name(m.getAction()), m.getDisplay(), m.getDescription(),
+				ActionName.name(m.getAction()), m.getDisplay(),
+				m.getIcon().isBlank() ? null : new GIcon(m.getIcon()), m.getOkText(),
+				m.getDescription(),
 				m.getParametersList()
 						.stream()
 						.collect(Collectors.toMap(MethodParameter::getName, this::makeParameter)),

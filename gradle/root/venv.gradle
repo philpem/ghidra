@@ -27,14 +27,10 @@ task createPythonVirtualEnvironment(type: Exec) {
 	
 	doFirst {
 		if (rootProject.PYTHON3 == null) {
-			throw new GradleException("A supported version of Python ${SUPPORTED_PY_VERSIONS} was not found!")
+			throw new GradleException("A supported version of Python [${PYTHON_SUPPORTED}] was not found!")
 		}
 		
 		commandLine rootProject.PYTHON3
 		args "-m", "venv", venvDir, "--copies"
 	}
-}
-
-if (findPython3(false)) {
-	rootProject.prepDev.dependsOn createPythonVirtualEnvironment
 }

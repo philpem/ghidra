@@ -82,7 +82,7 @@ import ghidra.util.task.UnknownProgressWrappingTaskMonitor;
  */
 public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContext {
 	public static final GoVer SUPPORTED_MIN_VER = new GoVer(1, 15);
-	public static final GoVer SUPPORTED_MAX_VER = new GoVer(1, 22);
+	public static final GoVer SUPPORTED_MAX_VER = new GoVer(1, 23);
 
 	private static final List<String> SYMBOL_SEARCH_PREFIXES = List.of("", "_" /* macho symbols */);
 	private static final List<String> SECTION_PREFIXES =
@@ -1026,7 +1026,6 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 
 	/**
 	 * Returns a function definition for a method that is attached to a golang type.
-	 * <p>
 	 * 
 	 * @param methodName name of method
 	 * @param methodType golang function def type
@@ -1161,6 +1160,13 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 
 				GoType type = it.next();
 				type.discoverGoTypes(discoveredTypes);
+			}
+			for (GoItab itab : module.getItabs()) {
+				upwtm.checkCancelled();
+				upwtm.setProgress(discoveredTypes.size());
+
+				itab.getInterfaceType().discoverGoTypes(discoveredTypes);
+				itab.getType().discoverGoTypes(discoveredTypes);
 			}
 		}
 
@@ -1332,7 +1338,6 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 	/**
 	 * Returns the {@link GoName} corresponding to an offset that is relative to the controlling
 	 * GoModuledata's typesOffset.
-	 * <p>
 	 * 
 	 * @param ptrInModule the address of the structure that contains the offset that needs to be
 	 * calculated.  The containing-structure's address is important because it indicates which
@@ -1527,7 +1532,7 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 		/**
 		 * Returns true if the specified function should be included in the bootstrap function defs
 		 * that are written to the golang_NNNN.gdt archive.
-		 * <p>
+		 * 
 		 * @return true if function should be included in golang.gdt bootstrap file
 		 */
 		public boolean isBootstrapFunction() {

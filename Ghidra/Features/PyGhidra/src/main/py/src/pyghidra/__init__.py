@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ##
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 # stub for documentation and typing
 # this is mostly to hide the function parameter
@@ -54,10 +54,10 @@ debug_callback = _debug_callback
 
 
 # Expose API
-from .core import run_script, start, started, open_program
-from .launcher import DeferredPyGhidraLauncher, GuiPyGhidraLauncher, HeadlessPyGhidraLauncher
-from .script import get_current_interpreter
-from .version import ApplicationInfo, ExtensionDetails
+from pyghidra.core import run_script, start, started, open_program
+from pyghidra.launcher import DeferredPyGhidraLauncher, GuiPyGhidraLauncher, HeadlessPyGhidraLauncher
+from pyghidra.script import get_current_interpreter
+from pyghidra.version import ApplicationInfo, ExtensionDetails
 
 
 __all__ = [

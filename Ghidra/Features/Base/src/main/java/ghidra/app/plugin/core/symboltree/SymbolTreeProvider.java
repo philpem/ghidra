@@ -150,11 +150,7 @@ public class SymbolTreeProvider extends ComponentProviderAdapter {
 
 	private SymbolGTree createTree(SymbolTreeRootNode rootNode) {
 		if (tree != null) {
-			GTreeNode oldRootNode = tree.getModelRoot();
-			tree.setProgram(rootNode.getProgram());
 			tree.setRootNode(rootNode);
-
-			oldRootNode.removeAll();// assist in cleanup a bit
 			return tree;
 		}
 

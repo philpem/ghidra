@@ -38,6 +38,7 @@ data64_compiler_map = {
 x86_compiler_map = {
     'windows': 'windows',
     'Cygwin': 'windows',
+    'default': 'windows',
 }
 
 default_compiler_map = {
@@ -208,16 +209,11 @@ class DefaultMemoryMapper(object):
         self.defaultSpace = defaultSpace
 
     def map(self, proc: int, offset: int):
-        if proc == 0:
-            space = self.defaultSpace
-        else:
-            space = f'{self.defaultSpace}{proc}'
+        space = self.defaultSpace
         return self.defaultSpace, Address(space, offset)
 
     def map_back(self, proc: int, address: Address) -> int:
-        if address.space == self.defaultSpace and proc == 0:
-            return address.offset
-        if address.space == f'{self.defaultSpace}{proc}':
+        if address.space == self.defaultSpace:
             return address.offset
         raise ValueError(f"Address {address} is not in process {proc}")
 

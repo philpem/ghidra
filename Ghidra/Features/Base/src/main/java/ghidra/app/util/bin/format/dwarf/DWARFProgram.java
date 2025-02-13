@@ -54,7 +54,7 @@ public class DWARFProgram implements Closeable {
 	public static final CategoryPath DWARF_ROOT_CATPATH = CategoryPath.ROOT.extend(DWARF_ROOT_NAME);
 	public static final CategoryPath UNCAT_CATPATH = DWARF_ROOT_CATPATH.extend("_UNCATEGORIZED_");
 
-	private static final String DWARF_BOOKMARK_CAT = "DWARF";
+	public static final String DWARF_BOOKMARK_CAT = "DWARF";
 	private static final int NAME_HASH_REPLACEMENT_SIZE = 8 + 2 + 2;
 	private static final String ELLIPSES_STR = "...";
 	protected static final EnumSet<DWARFAttribute> REF_ATTRS =
@@ -71,7 +71,7 @@ public class DWARFProgram implements Closeable {
 	 * If the program is a MachO binary (Mac), it must have a ".dSYM" directory co-located 
 	 * next to the original binary file on the native filesystem (outside of Ghidra).  See the 
 	 * DSymSectionProvider for more info.
-	 * <p>
+	 * 
 	 * @param program {@link Program} to test
 	 * @return boolean true if program probably has DWARF info, false if not
 	 */
@@ -104,7 +104,6 @@ public class DWARFProgram implements Closeable {
 	 * <p>
 	 * This is similar to {@link #isDWARF(Program)}, but is a stronger check that is more
 	 * expensive as it could involve searching for external files.
-	 * <p>
 	 * 
 	 * @param program {@link Program} to test
 	 * @param monitor {@link TaskMonitor} that can be used to cancel
@@ -1336,7 +1335,7 @@ public class DWARFProgram implements Closeable {
 	 * A fixup value that needs to be applied to static addresses of the program.
 	 * <p>
 	 * This value is necessary if the program's built-in base address is overridden at import time.
-	 * <p>
+	 * 
 	 * @return long value to add to static addresses discovered in DWARF to make it agree with
 	 * Ghidra's imported program.
 	 */

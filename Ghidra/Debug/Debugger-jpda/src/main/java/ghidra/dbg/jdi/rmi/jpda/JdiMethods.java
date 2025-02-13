@@ -15,7 +15,7 @@
  */
 package ghidra.dbg.jdi.rmi.jpda;
 
-import static ghidra.dbg.jdi.rmi.jpda.JdiManager.*;
+import static ghidra.dbg.jdi.rmi.jpda.JdiConnector.*;
 
 import java.io.IOException;
 import java.util.*;
@@ -25,19 +25,19 @@ import com.sun.jdi.request.*;
 
 import ghidra.app.plugin.core.debug.client.tracermi.*;
 import ghidra.app.plugin.core.debug.client.tracermi.RmiMethodRegistry.TraceMethod;
-import ghidra.dbg.target.TargetMethod.Param;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRange;
 import ghidra.rmi.trace.TraceRmi.MemoryState;
+import ghidra.trace.model.target.iface.TraceObjectMethod.Param;
 import ghidra.util.Msg;
 
 public class JdiMethods implements RmiMethods {
 
-	private JdiManager manager;
+	private JdiConnector connector;
 	private JdiCommands cmds;
 
-	public JdiMethods(JdiManager manager, JdiCommands cmds) {
-		this.manager = manager;
+	public JdiMethods(JdiConnector connector, JdiCommands cmds) {
+		this.connector = connector;
 		this.cmds = cmds;
 		registerMethods();
 	}
@@ -47,7 +47,7 @@ public class JdiMethods implements RmiMethods {
 		for (java.lang.reflect.Method m : cls.getMethods()) {
 			TraceMethod annot = m.getAnnotation(TraceMethod.class);
 			if (annot != null) {
-				manager.registerRemoteMethod(this, m, m.getName());
+				connector.registerRemoteMethod(this, m, m.getName());
 			}
 		}
 	}
@@ -343,7 +343,7 @@ public class JdiMethods implements RmiMethods {
 				name = "find") String targetClass) {
 		return find_class(obj, targetClass);
 	}
-	
+
 	@TraceMethod(display = "Load class")
 	public boolean find_class(
 			@Param(
@@ -377,10 +377,12 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(display = "Refresh reference types")
 	public void refresh_canonical_reference_types(
-			@Param(schema = "CanonicalReferenceTypeContainer", name = "container") RmiTraceObject obj) {
+			@Param(
+				schema = "CanonicalReferenceTypeContainer",
+				name = "container") RmiTraceObject obj) {
 		refresh_reference_types(obj);
 	}
-	
+
 	/**
 	 * NB. Did not assign action="refresh" because this method is expensive. Assigning that action
 	 * name will cause the UI to do it upon expanding the node, which we <em>do not</em> want.
@@ -470,7 +472,7 @@ public class JdiMethods implements RmiMethods {
 	public void load_reftype(
 			@Param(schema = "ReferenceType", name = "reference_type") RmiTraceObject obj) {
 		try (RmiTransaction tx = cmds.state.trace.openTx("RefreshReferenceType")) {
-			VirtualMachine vm = manager.getJdi().getCurrentVM();
+			VirtualMachine vm = connector.getJdi().getCurrentVM();
 			String path = obj.getPath();
 			String mempath = cmds.getPath(vm) + ".Classes";
 			ReferenceType refType = (ReferenceType) getObjectFromPath(path);
@@ -638,7 +640,7 @@ public class JdiMethods implements RmiMethods {
 		VirtualMachine vm = (VirtualMachine) getObjectFromPath(obj.getPath());
 		vm.exit(143);
 		try {
-			manager.getJdi().sendInterruptNow();
+			connector.getJdi().sendInterruptNow();
 		}
 		catch (IOException e) {
 			e.printStackTrace();
@@ -649,28 +651,28 @@ public class JdiMethods implements RmiMethods {
 	public void resume_vm(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
 		VirtualMachine vm = (VirtualMachine) getObjectFromPath(obj.getPath());
 		vm.resume();
-		manager.getHooks().setState(vm);
+		connector.getHooks().setState(vm);
 	}
 
 	@TraceMethod(action = "resume", display = "Resume")
 	public void resume_thread(@Param(schema = "Thread", name = "thread") RmiTraceObject obj) {
 		ThreadReference thread = (ThreadReference) getObjectFromPath(obj.getPath());
 		thread.resume();
-		manager.getHooks().setState(thread.virtualMachine());
+		connector.getHooks().setState(thread.virtualMachine());
 	}
 
 	@TraceMethod(action = "interrupt", display = "Suspend")
 	public void suspend_vm(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
 		VirtualMachine vm = (VirtualMachine) getObjectFromPath(obj.getPath());
 		vm.suspend();
-		manager.getHooks().setState(vm);
+		connector.getHooks().setState(vm);
 	}
 
 	@TraceMethod(action = "interrupt", display = "Suspend")
 	public void suspend_thread(@Param(schema = "Thread", name = "thread") RmiTraceObject obj) {
 		ThreadReference thread = (ThreadReference) getObjectFromPath(obj.getPath());
 		thread.suspend();
-		manager.getHooks().setState(thread.virtualMachine());
+		connector.getHooks().setState(thread.virtualMachine());
 	}
 
 	/**
@@ -679,7 +681,7 @@ public class JdiMethods implements RmiMethods {
 	 */
 	@TraceMethod(action = "step_into", display = "Step into")
 	public void step_vm_into(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		List<ThreadReference> threads = getThreadsFromValue(obj);
 		for (ThreadReference thread : threads) {
 			try {
@@ -697,7 +699,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "step_over", display = "Step over")
 	public void step_vm_over(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		List<ThreadReference> threads = getThreadsFromValue(obj);
 		for (ThreadReference thread : threads) {
 			try {
@@ -715,7 +717,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "step_out", display = "Step out")
 	public void step_vm_out(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		List<ThreadReference> threads = getThreadsFromValue(obj);
 		for (ThreadReference thread : threads) {
 			try {
@@ -733,7 +735,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "step_into", display = "Step into")
 	public void step_into(@Param(schema = "Thread", name = "thread") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ThreadReference thread = (ThreadReference) getObjectFromPath(obj.getPath());
 		StepRequest stepReq = vm.eventRequestManager()
 				.createStepRequest(thread, StepRequest.STEP_MIN,
@@ -744,7 +746,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "step_over", display = "Step over")
 	public void step_over(@Param(schema = "Thread", name = "thread") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ThreadReference thread = (ThreadReference) getObjectFromPath(obj.getPath());
 		StepRequest stepReq = vm.eventRequestManager()
 				.createStepRequest(thread, StepRequest.STEP_MIN,
@@ -755,7 +757,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "step_out", display = "Step out")
 	public void step_out(@Param(schema = "Thread", name = "thread") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ThreadReference thread = (ThreadReference) getObjectFromPath(obj.getPath());
 		StepRequest stepReq = vm.eventRequestManager()
 				.createStepRequest(thread, StepRequest.STEP_MIN,
@@ -769,7 +771,7 @@ public class JdiMethods implements RmiMethods {
 		Object object = getObjectFromPath(obj.getPath());
 		if (object instanceof ThreadReference thread) {
 			thread.interrupt();
-			manager.getHooks().setState(thread.virtualMachine());
+			connector.getHooks().setState(thread.virtualMachine());
 		}
 	}
 
@@ -787,7 +789,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(display = "Break on execute")
 	public void break_location(@Param(schema = "Location", name = "location") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof Location loc) {
 			BreakpointRequest brkReq = vm.eventRequestManager()
@@ -799,7 +801,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(display = "Break on access")
 	public void break_access(@Param(schema = "Field", name = "field") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof Field field) {
 			AccessWatchpointRequest brkReq = vm.eventRequestManager()
@@ -811,7 +813,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(display = "Break on modify")
 	public void break_modify(@Param(schema = "Field", name = "field") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof Field field) {
 			ModificationWatchpointRequest brkReq = vm.eventRequestManager()
@@ -836,7 +838,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Uncaught exceptions will be notified",
 				display = "NotifyUncaught",
 				name = "notify_uncaught") boolean notifyUncaught) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof ReferenceType reftype) {
 			ExceptionRequest excReq = vm.eventRequestManager()
@@ -847,7 +849,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_started(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ThreadStartRequest brkReq = vm.eventRequestManager()
 				.createThreadStartRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -872,7 +874,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_death(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ThreadDeathRequest brkReq = vm.eventRequestManager()
 				.createThreadDeathRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -897,7 +899,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(display = "Break on VM death")
 	public void break_vm_death(@Param(schema = "VirtualMachine", name = "vm") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		VMDeathRequest brkReq = vm.eventRequestManager()
 				.createVMDeathRequest();
 		brkReq.enable();
@@ -905,7 +907,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_enter(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MethodEntryRequest brkReq = vm.eventRequestManager()
 				.createMethodEntryRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -949,7 +951,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_exit(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MethodExitRequest brkReq = vm.eventRequestManager()
 				.createMethodExitRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -993,7 +995,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_load(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ClassPrepareRequest brkReq = vm.eventRequestManager()
 				.createClassPrepareRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -1018,7 +1020,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_unload(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ClassUnloadRequest brkReq = vm.eventRequestManager()
 				.createClassUnloadRequest();
 		brkReq.enable();
@@ -1032,7 +1034,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_mon_enter_contention(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MonitorContendedEnterRequest brkReq = vm.eventRequestManager()
 				.createMonitorContendedEnterRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -1077,7 +1079,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_mon_entered_contention(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MonitorContendedEnteredRequest brkReq = vm.eventRequestManager()
 				.createMonitorContendedEnteredRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -1122,7 +1124,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_mon_wait(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MonitorWaitRequest brkReq = vm.eventRequestManager()
 				.createMonitorWaitRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -1167,7 +1169,7 @@ public class JdiMethods implements RmiMethods {
 	}
 
 	private void break_mon_waited(RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MonitorWaitedRequest brkReq = vm.eventRequestManager()
 				.createMonitorWaitedRequest();
 		Object ctxt = getObjectFromPath(obj.getPath());
@@ -1389,7 +1391,7 @@ public class JdiMethods implements RmiMethods {
 	@TraceMethod(action = "toggle", display = "Toggle breakpoint")
 	public void toggle_breakpoint(
 			@Param(schema = "BreakpointSpec", name = "breakpoint") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof Field field) {
 			ModificationWatchpointRequest brkReq = vm.eventRequestManager()
@@ -1410,7 +1412,7 @@ public class JdiMethods implements RmiMethods {
 	@TraceMethod(action = "delete", display = "Delete breakpoint")
 	public void delete_breakpoint(
 			@Param(schema = "BreakpointSpec", name = "breakpoint") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof EventRequest req) {
 			vm.eventRequestManager().deleteEventRequest(req);
@@ -1434,7 +1436,7 @@ public class JdiMethods implements RmiMethods {
 
 	@TraceMethod(action = "delete", display = "Delete Event")
 	public void delete_event(@Param(schema = "Event", name = "event") RmiTraceObject obj) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		Object ctxt = getObjectFromPath(obj.getPath());
 		if (ctxt instanceof EventRequest req) {
 			vm.eventRequestManager().deleteEventRequest(req);
@@ -1453,7 +1455,7 @@ public class JdiMethods implements RmiMethods {
 			@Param(schema = "MethodContainer", name = "container") RmiTraceObject obj) {
 		String ppath = cmds.getParentPath(obj.getPath());
 		Object parent = getObjectFromPath(ppath);
-		manager.toggleScope(parent);
+		connector.toggleScope(parent);
 		refresh_methods(obj);
 	}
 
@@ -1468,7 +1470,7 @@ public class JdiMethods implements RmiMethods {
 			@Param(schema = "FieldContainer", name = "container") RmiTraceObject obj) {
 		String ppath = cmds.getParentPath(obj.getPath());
 		Object parent = getObjectFromPath(ppath);
-		manager.toggleScope(parent);
+		connector.toggleScope(parent);
 		if (obj.getPath().endsWith("Fields")) {
 			refresh_fields(obj);
 		}
@@ -1488,7 +1490,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Range",
 				display = "Range",
 				name = "range") AddressRange range) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		MemoryMapper mapper = cmds.state.trace.memoryMapper;
 		Address start = mapper.mapBack(range.getMinAddress());
 		try (RmiTransaction tx = cmds.state.trace.openTx("ReadMemory")) {
@@ -1516,7 +1518,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Method Name",
 				display = "MethodName",
 				name = "method_name") String methodName) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ObjectReference ref = (ObjectReference) getObjectFromPath(obj.getPath());
 		List<Method> methods = ref.referenceType().methodsByName(methodName);
 		if (methods.size() > 1) {
@@ -1544,7 +1546,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Method Name",
 				display = "MethodName",
 				name = "method_name") String methodName) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		ReferenceType reftype = (ReferenceType) getObjectFromPath(obj.getPath());
 		if (reftype instanceof ClassType cls) {
 			List<Method> methods = cls.methodsByName(methodName);
@@ -1578,7 +1580,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Thread Name",
 				display = "ThreadName",
 				name = "thread_name") String threadName) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		String path = obj.getPath();
 		Method method = (Method) getObjectFromPath(path);
 		ReferenceType declaringType = method.declaringType();
@@ -1605,7 +1607,7 @@ public class JdiMethods implements RmiMethods {
 				description = "Thread Name",
 				display = "ThreadName",
 				name = "thread_name") String threadName) {
-		VirtualMachine vm = manager.getJdi().getCurrentVM();
+		VirtualMachine vm = connector.getJdi().getCurrentVM();
 		String path = obj.getPath();
 		Method method = (Method) getObjectFromPath(path);
 		if (!method.isStatic()) {
@@ -1632,13 +1634,13 @@ public class JdiMethods implements RmiMethods {
 			threads.add(thread);
 		}
 		else {
-			threads.add(manager.getJdi().getCurrentThread());
+			threads.add(connector.getJdi().getCurrentThread());
 		}
 		return threads;
 	}
 
 	private Object getObjectFromPath(String path) {
-		return manager.objForPath(path);
+		return connector.objForPath(path);
 	}
 
 }

@@ -14,7 +14,6 @@
 # limitations under the License.
 ##
 import contextlib
-import ctypes
 import ctypes.util
 import html
 import importlib.metadata
@@ -36,17 +35,17 @@ import jpype
 from jpype import imports, _jpype
 from packaging.version import Version
 
-from .javac import java_compile
-from .script import PyGhidraScript
-from .version import ApplicationInfo, ExtensionDetails, MINIMUM_GHIDRA_VERSION
+from pyghidra.javac import java_compile
+from pyghidra.script import PyGhidraScript
+from pyghidra.version import ApplicationInfo, ExtensionDetails, MINIMUM_GHIDRA_VERSION
 
 logger = logging.getLogger(__name__)
 
 
 @contextlib.contextmanager
 def _silence_java_output(stdout=True, stderr=True):
-    from java.io import OutputStream, PrintStream
-    from java.lang import System
+    from java.io import OutputStream, PrintStream # type:ignore @UnresolvedImport
+    from java.lang import System # type:ignore @UnresolvedImport
     out = System.out
     err = System.err
     null = PrintStream(OutputStream.nullOutputStream())
@@ -110,13 +109,29 @@ class _PyGhidraImportLoader:
     def exec_module(self, fullname):
         pass
 
+class _GhidraBundleFinder(importlib.machinery.PathFinder):
+    """ (internal) Used to find modules in Ghidra bundle locations """
+    
+    def find_spec(self, fullname, path=None, target=None):
+        from ghidra.framework import Application
+        from ghidra.app.script import GhidraScriptUtil
+        if Application.isInitialized():
+            GhidraScriptUtil.acquireBundleHostReference()
+            try:
+                for directory in GhidraScriptUtil.getEnabledScriptSourceDirectories():
+                    spec = super().find_spec(fullname, [directory.absolutePath], target)
+                    if spec is not None:
+                        return spec
+            finally:
+                GhidraScriptUtil.releaseBundleHostReference()
+        return None
 
 @contextlib.contextmanager
 def _plugin_lock():
     """
     File lock for processing plugins
     """
-    from java.io import RandomAccessFile
+    from java.io import RandomAccessFile # type:ignore @UnresolvedImport
     path = Path(tempfile.gettempdir()) / "pyghidra_plugin_lock"
     try:
         # Python doesn't have a file lock except for unix systems
@@ -161,11 +176,14 @@ class PyGhidraLauncher:
         install_dir = install_dir or os.getenv("GHIDRA_INSTALL_DIR")
         self._install_dir = self._validate_install_dir(install_dir)
 
+        java_home_override = os.getenv("JAVA_HOME_OVERRIDE")
+        if java_home_override:
+            self._java_home = java_home_override
+
         # check if we are in the ghidra source tree
         support = Path(install_dir) / "support"
         if not support.exists():
             self._dev_mode = True
-            self._java_home = os.getenv("JAVA_HOME_OVERRIDE")
 
         self._plugins: List[Tuple[Path, ExtensionDetails]] = []
         self.verbose = verbose
@@ -216,14 +234,19 @@ class PyGhidraLauncher:
         raise Exception("org.eclipse.jdt.launching.VM_ARGUMENTS not found")
 
     def _jvm_args(self) -> List[str]:
+        
+        properties = [
+            f"-Dpyghidra.sys.prefix={sys.prefix}",
+            f"-Dpyghidra.sys.executable={sys.executable}"
+        ]
+        
         if self._dev_mode and self._java_home:
-            return self._parse_dev_args()
+            return properties + self._parse_dev_args()
 
         suffix = "_" + platform.system().upper()
         if suffix == "_DARWIN":
             suffix = "_MACOS"
         option_pattern: re.Pattern = re.compile(fr"VMARGS(?:{suffix})?=(.+)")
-        properties = []
 
         root = self._install_dir
 
@@ -383,8 +406,9 @@ class PyGhidraLauncher:
             **jpype_kwargs
         )
 
-        # Install hook into python importlib
+        # Install hooks into python importlib
         sys.meta_path.append(_PyGhidraImportLoader())
+        sys.meta_path.append(_GhidraBundleFinder())
 
         imports.registerDomain("ghidra")
 
@@ -426,7 +450,7 @@ class PyGhidraLauncher:
         # Add extra class paths
         # Do this before installing plugins incase dependencies are needed
         if self.class_files:
-            from java.lang import ClassLoader
+            from java.lang import ClassLoader # type:ignore @UnresolvedImport
             gcl = ClassLoader.getSystemClassLoader()
             for path in self.class_files:
                 gcl.addPath(path)
@@ -446,7 +470,7 @@ class PyGhidraLauncher:
             self._layout = GhidraLauncher.initializeGhidraEnvironment()
 
         # import properties to register the property customizer
-        from . import properties as _
+        from pyghidra import properties as _  # @UnusedImport
 
         _load_entry_points("pyghidra.pre_launch")
 
@@ -465,7 +489,7 @@ class PyGhidraLauncher:
                 self._pre_launch_init()
             self._launch()
         except Exception as e:
-            self._report_fatal_error("An error occured launching Ghidra", str(e), e)
+            self._report_fatal_error("An error occurred launching Ghidra", str(e), e)
 
     def get_install_path(self, plugin_name: str) -> Path:
         """
@@ -649,7 +673,7 @@ class GuiPyGhidraLauncher(PyGhidraLauncher):
 
     @staticmethod
     def _get_thread(name: str):
-        from java.lang import Thread
+        from java.lang import Thread # type:ignore @UnresolvedImport
         for t in Thread.getAllStackTraces().keySet():
             if t.getName() == name:
                 return t
@@ -657,11 +681,11 @@ class GuiPyGhidraLauncher(PyGhidraLauncher):
 
     def _launch(self):
         from ghidra import Ghidra
-        from java.lang import Runtime, Thread
+        from java.lang import Runtime, Thread # type:ignore @UnresolvedImport
 
         if sys.platform == "win32":
             appid = ctypes.c_wchar_p(self.app_info.name)
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(appid)
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(appid) # @UndefinedVariable
 
         stdout = _PyGhidraStdOut(sys.stdout)
         stderr = _PyGhidraStdOut(sys.stderr)

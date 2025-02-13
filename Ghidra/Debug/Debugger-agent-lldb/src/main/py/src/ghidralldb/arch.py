@@ -115,6 +115,14 @@ data64_compiler_map = {
     None: 'pointer64',
 }
 
+x86_compiler_map = {
+    'windows': 'windows',
+    'Cygwin': 'windows',
+    'linux' : 'gcc',
+    'default': 'gcc',
+    'unknown': 'gcc',
+}
+
 default_compiler_map = {
     'freebsd': 'gcc',
     'linux': 'gcc',
@@ -124,18 +132,17 @@ default_compiler_map = {
     'macosx': 'gcc',
     'tvos': 'gcc',
     'watchos': 'gcc',
-    'windows': 'Visual Studio',
-    # This may seem wrong, but Ghidra cspecs really describe the ABI
-    'Cygwin': 'Visual Studio',
+    'windows': 'windows',
+    'Cygwin': 'windows',
     'default': 'default',
-    'unknown': 'gcc',
+    'unknown': 'default',
 }
 
 compiler_map = {
     'DATA:BE:64:': data64_compiler_map,
     'DATA:LE:64:': data64_compiler_map,
-    'x86:LE:32:': default_compiler_map,
-    'x86:LE:64:': default_compiler_map,
+    'x86:LE:32:': x86_compiler_map,
+    'x86:LE:64:': x86_compiler_map,
     'ARM:LE:32:': default_compiler_map,
     'ARM:LE:64:': default_compiler_map,
 }
@@ -198,6 +205,9 @@ def compute_ghidra_language():
     # through them by endian and probably prefer default/simpler variants. The
     # heuristic for "simpler" will be 'default' then shortest variant id.
     arch = get_arch()
+    osabi = get_osabi()
+    if osabi == 'windows' and arch == 'i386':
+        arch = 'x86_64'
     endian = get_endian()
     lebe = ':BE:' if endian == 'big' else ':LE:'
     if not arch in language_map:
@@ -225,7 +235,7 @@ def compute_ghidra_compiler(lang):
         key=lambda l: compiler_map[l]
     )
     if len(matched_lang) == 0:
-        print(f"{lang} not found in compiler map")
+        print(f"{lang} not found in compiler map - using default compiler")
         return 'default'
     
     comp_map = compiler_map[matched_lang[0]]
@@ -234,9 +244,12 @@ def compute_ghidra_compiler(lang):
     osabi = get_osabi()
     if osabi in comp_map:
         return comp_map[osabi]
+    if lang.startswith("x86:"):
+        print(f"{osabi} not found in compiler map - using gcc")
+        return 'gcc'
     if None in comp_map:
         return comp_map[None]
-    print(f"{osabi} not found in compiler map")
+    print(f"{osabi} not found in compiler map - using default compiler")
     return 'default'
 
 
