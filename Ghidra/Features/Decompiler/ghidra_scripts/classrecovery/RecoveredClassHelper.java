@@ -137,11 +137,14 @@ public class RecoveredClassHelper {
 	protected final boolean createBookmarks;
 	protected final boolean useShortTemplates;
 	protected final boolean nameVfunctions;
+	protected final boolean makeVfunctionsThisCalls;
+
 	public HashMap<Address, Set<Function>> allVfunctions = new HashMap<>();
 
 	public RecoveredClassHelper(Program program, ServiceProvider serviceProvider,
 			FlatProgramAPI api, boolean createBookmarks, boolean useShortTemplates,
-			boolean nameVunctions, TaskMonitor monitor) throws Exception {
+			boolean nameVunctions, boolean makeVfunctionsThisCalls, TaskMonitor monitor)
+			throws Exception {
 
 		this.monitor = monitor;
 		this.program = program;
@@ -156,6 +159,7 @@ public class RecoveredClassHelper {
 		this.createBookmarks = createBookmarks;
 		this.useShortTemplates = useShortTemplates;
 		this.nameVfunctions = nameVunctions;
+		this.makeVfunctionsThisCalls = makeVfunctionsThisCalls;
 
 		globalNamespace = (GlobalNamespace) program.getGlobalNamespace();
 
@@ -433,6 +437,10 @@ public class RecoveredClassHelper {
 
 				Function calledFunction = extendedFlatAPI
 						.getReferencedFunction(instruction.getMinAddress(), getThunkedFunction);
+
+				if (calledFunction == null) {
+					continue;
+				}
 
 				// include the null functions in map so things using map can get accurate count
 				// of number of CALL instructions even if the call reg type
@@ -1256,7 +1264,7 @@ public class RecoveredClassHelper {
 
 	/**
 	 * temporarily change the function signature of the given constructor or destructor to replace
-	 * any empty structure with same size undefined datatype and to also remove the functin from
+	 * any empty structure with same size undefined datatype and to also remove the function from
 	 * its namespace to remove the empty structure from the this param. This is so that the
 	 * class member data calculations are made without bad info
 	 * @param function the given function
@@ -2112,6 +2120,10 @@ public class RecoveredClassHelper {
 			Function constructor =
 				extendedFlatAPI.getReferencedFunction(constructorReference, true);
 
+			if (constructor == null) {
+				continue;
+			}
+
 			if (recoveredClass.getIndeterminateList().contains(constructor)) {
 				addConstructorToClass(recoveredClass, constructor);
 				recoveredClass.removeIndeterminateConstructorOrDestructor(constructor);
@@ -2534,6 +2546,9 @@ public class RecoveredClassHelper {
 			RecoveredClass recoveredClass = referenceToClassMap.get(destructorReference);
 
 			Function destructor = extendedFlatAPI.getReferencedFunction(destructorReference, true);
+			if (destructor == null) {
+				continue;
+			}
 
 			if (recoveredClass.getIndeterminateList().contains(destructor)) {
 				addDestructorToClass(recoveredClass, destructor);
@@ -2711,11 +2726,11 @@ public class RecoveredClassHelper {
 			}
 
 			// get only the functions from the ones that are not already processed structures
-			// return null if not an unprocessed table
+			// return null if not an unprocessed table or if invalid 
 			List<Function> virtualFunctions = getFunctionsFromVftable(vftableAddress, vftableSymbol,
 				allowNullFunctionPtrs, allowDefaultRefsInMiddle);
 
-			// the vftable has already been processed - skip it
+			// the vftable has already been processed or invalid - skip it
 			if (virtualFunctions == null) {
 				continue;
 			}
@@ -2769,20 +2784,19 @@ public class RecoveredClassHelper {
 		return recoveredClasses;
 	}
 
-	//TODO: rework above method to call this so it works with both that and other calls
 	protected void updateClassWithVftable(RecoveredClass recoveredClass, Symbol vftableSymbol,
 			boolean allowNullFunctionPtrs, boolean allowDefaultRefsInMiddle) throws Exception {
+
 		// get only the functions from the ones that are not already processed
 		// structures
 		// return null if not an unprocessed table
-
 		Address vftableAddress = vftableSymbol.getAddress();
 		Namespace vftableNamespace = vftableSymbol.getParentNamespace();
 
 		List<Function> virtualFunctions = getFunctionsFromVftable(vftableAddress, vftableSymbol,
 			allowNullFunctionPtrs, allowDefaultRefsInMiddle);
 
-		// the vftable has already been processed - skip it
+		// the vftable has already been processed or is invalid - skip it
 		if (virtualFunctions == null) {
 			return;
 		}
@@ -2797,15 +2811,10 @@ public class RecoveredClassHelper {
 			recoveredClass.addVftableAddress(vftableAddress);
 			recoveredClass.addVftableVfunctionsMapping(vftableAddress, virtualFunctions);
 
-			// add it to the running list of RecoveredClass objects
-			// recoveredClasses.add(recoveredClass);
 		}
 		else {
 			recoveredClass.addVftableAddress(vftableAddress);
 			recoveredClass.addVftableVfunctionsMapping(vftableAddress, virtualFunctions);
-//						if (!recoveredClasses.contains(recoveredClass)) {
-//							recoveredClasses.add(recoveredClass);
-//						}
 
 		}
 
@@ -2975,9 +2984,9 @@ public class RecoveredClassHelper {
 			// pointing to are in the class already to determine size of array
 
 			// create vtable
-			int numFunctionPointers =
+			Integer numFunctionPointers =
 				createVftable(vftableAddress, allowNullFunctionPtrs, allowDefaultRefsInMiddle);
-			if (numFunctionPointers == 0) {
+			if (numFunctionPointers == null || numFunctionPointers == 0) {
 				return null;
 			}
 			// make it an array
@@ -3043,15 +3052,27 @@ public class RecoveredClassHelper {
 	 * @param vftableAddress the vftable address
 	 * @param allowNullFunctionPtrs if true allow vftables to have null pointers
 	 * @param allowDefaultRefsInMiddle if true allow default references into the middle of the table
-	 * @return the created array of pointers Data or null
+	 * @return the number of functions in the table or null if none or in invalid block
 	 * @throws CancelledException if cancelled
 	 */
-	public int createVftable(Address vftableAddress, boolean allowNullFunctionPtrs,
+	public Integer createVftable(Address vftableAddress, boolean allowNullFunctionPtrs,
 			boolean allowDefaultRefsInMiddle) throws CancelledException {
 
 		int numFunctionPointers = 0;
 		Address address = vftableAddress;
+
 		MemoryBlock currentBlock = program.getMemory().getBlock(vftableAddress);
+
+		if (currentBlock == null) {
+			Msg.warn(this, "Cannot create vftable at " + vftableAddress.toString() +
+				" because it is in an invalid memory block.");
+			return null;
+		}
+		if (currentBlock.isExternalBlock() || !currentBlock.isInitialized()) {
+			Msg.warn(this, "Cannot create vftable at " + vftableAddress.toString() +
+				" because it is in an external or an uninitialized block.");
+			return null;
+		}
 
 		boolean stillInCurrentTable = true;
 		while (address != null && currentBlock.contains(address) && stillInCurrentTable &&
@@ -4234,7 +4255,7 @@ public class RecoveredClassHelper {
 		DataType dataType = dataTypeManager.getDataType(folderPath, structureName);
 		if (extendedFlatAPI.isEmptyStructure(dataType)) {
 
-			dataTypeManager.remove(dataType, monitor);
+			dataTypeManager.remove(dataType);
 			Category classCategory = dataTypeManager.getCategory(folderPath);
 			Category parentCategory = classCategory.getParent();
 			boolean tryToRemove = true;
@@ -4753,8 +4774,10 @@ public class RecoveredClassHelper {
 			// can't put external functions into a namespace from this program
 			if (!vfunction.isExternal()) {
 
-				// if not already, make it a this call
-				makeFunctionThiscall(vfunction);
+				// check script option and if not already, make it a this call
+				if (makeVfunctionsThisCalls) {
+					makeFunctionThiscall(vfunction);
+				}
 
 				// put symbol on the virtual function
 				Symbol vfunctionSymbol = vfunction.getSymbol();
@@ -7857,7 +7880,7 @@ public class RecoveredClassHelper {
 			// to the purecall function and we don't want to rename that function to the new name
 			// since anyone calling purecall will call it
 			if (!componentFunctionDefinition.getName().contains("purecall")) {
-				// otherwise update data type with new new signature
+				// otherwise update data type with the new signature
 				FunctionDefinition changedFunctionDefinition =
 					updateFunctionDefinition(componentFunctionDefinition, newFunctionDefinition);
 

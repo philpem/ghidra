@@ -117,8 +117,10 @@ public interface DataTypeComponent {
 	 *
 	 * @param fieldName the new field name for this component.
 	 *
-	 * @throws DuplicateNameException if another component of the parent has
-	 * the specified field name.
+	 * @throws DuplicateNameException This is actually never thrown anymore. All the other ways
+	 * of naming fields did not perform this check and it would cause quite a bit of churn to 
+	 * add that exception to all the other methods that affect field names. So to be consistent,
+	 * we no longer do the check in this method.
 	 */
 	public void setFieldName(String fieldName) throws DuplicateNameException;
 
@@ -174,8 +176,8 @@ public interface DataTypeComponent {
 	}
 
 	/**
-	 * Returns true if this this component is not defined. It is just a placeholder.
-	 * @return true if this this component is not defined. It is just a placeholder.
+	 * Returns true if this component is not defined. It is just a placeholder.
+	 * @return true if this component is not defined. It is just a placeholder.
 	 */
 	public boolean isUndefined();
 

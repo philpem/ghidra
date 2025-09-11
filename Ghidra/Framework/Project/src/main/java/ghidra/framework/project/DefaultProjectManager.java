@@ -141,6 +141,7 @@ public class DefaultProjectManager implements ProjectManager {
 
 		try {
 			currentProject = new DefaultProject(this, projectLocator, resetOwner);
+			AppInfo.setActiveProject(currentProject);
 			if (doRestore) {
 				currentProject.restore();
 			}
@@ -151,8 +152,6 @@ public class DefaultProjectManager implements ProjectManager {
 			return currentProject;
 		}
 		catch (LockException e) {
-			Msg.showError(LOG, null, "Locked Project!",
-				"Cannot open locked project: " + projectLocator, e);
 			throw e;
 		}
 		catch (ReadOnlyException e) {
@@ -166,7 +165,6 @@ public class DefaultProjectManager implements ProjectManager {
 			throw e;
 		}
 		finally {
-			AppInfo.setActiveProject(currentProject);
 			if (currentProject == null) {
 				File dirFile = projectLocator.getProjectDir();
 				if (!dirFile.exists() || !dirFile.isDirectory()) {

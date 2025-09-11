@@ -20,8 +20,7 @@ import java.awt.Point;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.dnd.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.util.*;
 
 import javax.swing.Icon;
@@ -31,12 +30,13 @@ import javax.swing.event.ChangeListener;
 
 import docking.*;
 import docking.action.*;
+import docking.action.builder.ActionBuilder;
 import docking.actions.PopupActionProvider;
 import docking.dnd.*;
 import docking.widgets.EventTrigger;
 import docking.widgets.fieldpanel.FieldPanel;
 import docking.widgets.fieldpanel.HoverHandler;
-import docking.widgets.fieldpanel.internal.FieldPanelCoordinator;
+import docking.widgets.fieldpanel.internal.FieldPanelScrollCoordinator;
 import docking.widgets.fieldpanel.support.*;
 import docking.widgets.tab.GTabPanel;
 import generic.theme.GIcon;
@@ -60,9 +60,9 @@ import ghidra.framework.plugintool.NavigatableComponentProviderAdapter;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.*;
+import ghidra.program.model.mem.Memory;
 import ghidra.program.util.*;
-import ghidra.util.HelpLocation;
-import ghidra.util.Swing;
+import ghidra.util.*;
 
 public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		implements ProgramLocationListener, ProgramSelectionListener, Draggable, Droppable,
@@ -104,7 +104,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	private ListingPanel otherPanel;
 	private CoordinatedListingPanelListener coordinatedListingPanelListener;
 	private FormatManager formatMgr;
-	private FieldPanelCoordinator coordinator;
+	private FieldPanelScrollCoordinator coordinator;
 	private ProgramSelectionListener liveProgramSelectionListener = (selection, trigger) -> {
 		liveSelection = selection;
 		updateSubTitle();
@@ -470,21 +470,37 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		action = new GotoNextFunctionAction(tool, plugin.getName());
 		tool.addAction(action);
 
+		buildQuickTogleFieldActions();
+
 	}
 
-	void fieldOptionChanged(String fieldName, Object newValue) {
-		//TODO		if (name.startsWith(OPERAND_OPTIONS_PREFIX) && (newValue instanceof Boolean)) {
-		//			for (int i = 0; i < toggleOperandMarkupActions.length; i++) {
-		//				ToggleOperandMarkupAction action = toggleOperandMarkupActions[i];
-		//				if (name.equals(action.getOptionName())) {
-		//					boolean newState = ((Boolean)newValue).booleanValue();
-		//					if (action.isSelected() != newState) {
-		//						action.setSelected(newState);
-		//					}
-		//					break;
-		//				}
-		//			}
-		//		}
+	private void buildQuickTogleFieldActions() {
+		List<String> quickToggleFieldNames = formatMgr.getQuickToggleFieldNames();
+		int count = 0;
+		for (String fieldName : quickToggleFieldNames) {
+			DockingAction toggleAction = new ActionBuilder("Toggle " + fieldName, plugin.getName())
+					.popupMenuPath("Toggle Field", fieldName)
+					.popupMenuGroup("Field", "" + count)
+					.helpLocation(new HelpLocation("CodeBrowserPlugin", "Toggle_Field"))
+					// only show this action when over the listing field header
+					.popupWhen(c -> c.getContextObject() instanceof FieldHeaderLocation)
+					.onAction(c -> formatMgr.toggleField(fieldName))
+					.buildAndInstallLocal(this);
+
+			// automatically assign keybindings to the first 5 toggle fields. 
+			if (count < 5) {
+				char c = (char) ('1' + count);
+				toggleAction.setKeyBindingData(
+					new KeyBindingData(c, InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+			}
+			else {
+				Msg.debug(this,
+					"Excessive Field Toggle actions . No keybinding assigned for field: " +
+						fieldName);
+			}
+			count++;
+		}
+		tool.setMenuGroup(new String[] { "Toggle Field" }, "Disassembly");
 	}
 
 	public ListingPanel getListingPanel() {
@@ -752,7 +768,7 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		ListingModel otherAlignedModel = multiModel.getAlignedModel(1);
 		listingPanel.setListingModel(myAlignedModel);
 		lp.setListingModel(otherAlignedModel);
-		coordinator = new FieldPanelCoordinator(
+		coordinator = new FieldPanelScrollCoordinator(
 			new FieldPanel[] { listingPanel.getFieldPanel(), lp.getFieldPanel() });
 		addHoverServices(otherPanel);
 		HoverHandler hoverHandler = listingPanel.getFieldPanel().getHoverHandler();
@@ -943,14 +959,14 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	public void selectAll() {
 		listingPanel.getFieldPanel().requestFocus();
-		ProgramSelection sel = new ProgramSelection(program.getAddressFactory(),
+		ProgramSelection sel = new ProgramSelection(
 			listingPanel.getAddressIndexMap().getOriginalAddressSet());
 		doSetSelection(sel);
 	}
 
 	public void selectComplement() {
 		AddressSet complement = listingPanel.selectComplement();
-		ProgramSelection sel = new ProgramSelection(program.getAddressFactory(), complement);
+		ProgramSelection sel = new ProgramSelection(complement);
 		doSetSelection(sel);
 	}
 
@@ -958,25 +974,26 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		return fieldNavigator;
 	}
 
-	public void setView(AddressSetView view) {
+	void setView(AddressSetView view) {
+
 		// If we are using a MultiListingLayoutModel then adjust the view address set.
 		AddressSetView adjustedView = view;
 
 		if (multiModel != null) {
-			if ((program != null) && view.contains(new AddressSet(program.getMemory()))) {
-				Program otherProgram = otherPanel.getProgram();
+			Program otherProgram = otherPanel.getProgram();
+			Memory memory = program.getMemory();
+			if (view.contains(memory)) {
 				adjustedView = ProgramMemoryComparator.getCombinedAddresses(program, otherProgram);
 			}
+
 			multiModel.setAddressSet(adjustedView);
+
+			// convert the view addresses to ones compatible with the otherPanel's model
+			AddressSet diffAddrs = DiffUtility.getCompatibleAddressSet(adjustedView, otherProgram);
+			otherPanel.setView(diffAddrs);
 		}
 
 		listingPanel.setView(adjustedView);
-		if (otherPanel != null) {
-			// Convert the view addresses to ones compatible with the otherPanel's model.
-			AddressSet compatibleAddressSet =
-				DiffUtility.getCompatibleAddressSet(adjustedView, otherPanel.getProgram());
-			otherPanel.setView(compatibleAddressSet);
-		}
 	}
 
 	@Override

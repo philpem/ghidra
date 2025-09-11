@@ -547,7 +547,7 @@ public class DebuggerModulesProvider extends ComponentProviderAdapter
 	DebuggerModulesPanel modulesPanel;
 	DebuggerSectionsPanel sectionsPanel;
 
-	// TODO: Lazy construction of these dialogs?
+	// LATER?: Lazy construction of these dialogs?
 	private final DebuggerBlockChooserDialog blockChooserDialog;
 	private final DebuggerModuleMapProposalDialog moduleProposalDialog;
 	private final DebuggerSectionMapProposalDialog sectionProposalDialog;
@@ -1113,6 +1113,10 @@ public class DebuggerModulesProvider extends ComponentProviderAdapter
 				}
 				bestModule = module;
 			}
+			if (bestModule == null) {
+				setSelectedModules(Set.of());
+				return;
+			}
 			if (bestModule.getSections(snap).isEmpty()) {
 				setSelectedModules(Set.of(bestModule));
 				return;
@@ -1388,6 +1392,7 @@ public class DebuggerModulesProvider extends ComponentProviderAdapter
 			List.of(programManager.getAllOpenPrograms()));
 	}
 
+	@Override
 	public void setAutoMapSpec(AutoMapSpec spec) {
 		actionAutoMap.setCurrentActionStateByUserData(spec);
 	}

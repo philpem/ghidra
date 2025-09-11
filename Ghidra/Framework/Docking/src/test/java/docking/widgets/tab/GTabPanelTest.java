@@ -4,9 +4,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *      http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -127,14 +127,14 @@ public class GTabPanelTest extends AbstractDockingTest {
 		setSelectedValue("ABCDEFGHIJK");
 		assertTrue(isVisibleTab("ABCDEFGHIJK"));
 		setSelectedValue("One");
-		assertFalse(isVisibleTab("ABCDEFGHIJK"));
+		assertTrue(isVisibleTab("ABCDEFGHIJK"));
 	}
 
 	@Test
 	public void testGetHiddenTabs() {
 		List<String> hiddenTabs = getHiddenTabs();
 		assertTrue(hiddenTabs.isEmpty());
-		addValue("asdfasfasfdasfasfasfasfasfasfasfasfasfasfasfasfsaasasfassafsasf");
+		addValue("asdfasfasfdasfasfasfasfasfasfasfasfasfasfasfasfsaasasfassafsasfsasfasdfas");
 		addValue("ABCDEFGHIJK");
 		hiddenTabs = getHiddenTabs();
 		assertEquals(2, hiddenTabs.size());
@@ -231,6 +231,21 @@ public class GTabPanelTest extends AbstractDockingTest {
 		highlightNextTab(true);
 		assertEquals("Test Tab Panel: One selected: Two highlighted",
 			gTabPanel.getAccessibleName());
+	}
+
+	@Test
+	public void testMoveTab() {
+		assertEquals("One", getValue(0));
+		assertEquals("Two", getValue(1));
+		assertEquals("Three Three Three", getValue(2));
+		moveTab("One", 2);
+		assertEquals("Two", getValue(0));
+		assertEquals("Three Three Three", getValue(1));
+		assertEquals("One", getValue(2));
+	}
+
+	private void moveTab(String value, int newIndex) {
+		runSwing(() -> gTabPanel.moveTab(value, newIndex));
 	}
 
 	private List<String> getHiddenTabs() {

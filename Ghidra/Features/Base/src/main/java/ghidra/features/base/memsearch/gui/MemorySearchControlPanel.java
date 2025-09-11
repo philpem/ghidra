@@ -274,6 +274,10 @@ class MemorySearchControlPanel extends JPanel {
 		searchButton.setSelectedStateByClientData(combiner);
 	}
 
+	void setSearchCombiner(Combiner combiner) {
+		searchButton.setSelectedStateByClientData(combiner);
+	}
+
 	private void adjustLocationForCaretPosition(Point location) {
 		JTextField textField = searchInputField.getTextField();
 		Caret caret = textField.getCaret();
@@ -300,7 +304,7 @@ class MemorySearchControlPanel extends JPanel {
 			return;
 		}
 
-		DockingUtils.setTipWindowEnabled(false);
+		setMyToolTipsEnabled(false);
 
 		Point location = searchInputField.getLocation();
 		adjustLocationForCaretPosition(location);
@@ -322,7 +326,7 @@ class MemorySearchControlPanel extends JPanel {
 
 	private void clearInputError() {
 		errorMessage = null;
-		DockingUtils.setTipWindowEnabled(true);
+		setMyToolTipsEnabled(true);
 		PopupWindow.hideAllWindows();
 		if (popup != null) {
 			popup.dispose();
@@ -330,6 +334,34 @@ class MemorySearchControlPanel extends JPanel {
 			clearInputMonitor.cancel();
 			clearInputMonitor = null;
 		}
+	}
+
+	private void setMyToolTipsEnabled(boolean enabled) {
+
+		if (!DockingUtils.isTipWindowEnabled()) {
+			return;
+		}
+
+		ToolTipManager ttm = ToolTipManager.sharedInstance();
+		doSetMyToolTipsEnabled(this, ttm, enabled);
+	}
+
+	private void doSetMyToolTipsEnabled(JComponent c, ToolTipManager ttm, boolean enabled) {
+
+		if (enabled) {
+			ttm.registerComponent(c);
+		}
+		else {
+			ttm.unregisterComponent(c);
+		}
+
+		Component[] children = c.getComponents();
+		for (Component child : children) {
+			if (child instanceof JComponent) {
+				doSetMyToolTipsEnabled((JComponent) child, ttm, enabled);
+			}
+		}
+
 	}
 
 	private void updateCombo() {
@@ -460,5 +492,4 @@ class MemorySearchControlPanel extends JPanel {
 	Component getDefaultFocusComponent() {
 		return searchInputField;
 	}
-
 }

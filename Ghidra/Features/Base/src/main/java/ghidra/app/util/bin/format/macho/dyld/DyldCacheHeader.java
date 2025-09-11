@@ -34,7 +34,7 @@ import ghidra.util.task.TaskMonitor;
 /**
  * Represents a dyld_cache_header structure.
  * 
- * @see <a href="https://github.com/apple-oss-distributions/dyld/blob/main/cache-builder/dyld_cache_format.h">dyld_cache_format.h</a> 
+ * @see <a href="https://github.com/apple-oss-distributions/dyld/blob/main/include/mach-o/dyld_cache_format.h">dyld_cache_format.h</a> 
  */
 public class DyldCacheHeader implements StructConverter {
 
@@ -115,6 +115,10 @@ public class DyldCacheHeader implements StructConverter {
 	private long dynamicDataMaxSize;
 	private int tproMappingsOffset;
 	private int tproMappingsCount;
+	private long functionVariantInfoAddr;
+	private long functionVariantInfoSize;
+	private long prewarmingDataOffset;
+	private long prewarmingDataSize;
 
 	private int headerSize;
 	private BinaryReader reader;
@@ -357,6 +361,18 @@ public class DyldCacheHeader implements StructConverter {
 		}
 		if (reader.getPointerIndex() < mappingOffset) {
 			tproMappingsCount = reader.readNextInt();
+		}
+		if (reader.getPointerIndex() < mappingOffset) {
+			functionVariantInfoAddr = reader.readNextLong();
+		}
+		if (reader.getPointerIndex() < mappingOffset) {
+			functionVariantInfoSize = reader.readNextLong();
+		}
+		if (reader.getPointerIndex() < mappingOffset) {
+			prewarmingDataOffset = reader.readNextLong();
+		}
+		if (reader.getPointerIndex() < mappingOffset) {
+			prewarmingDataSize = reader.readNextLong();
 		}
 
 		headerSize = (int) (reader.getPointerIndex() - startIndex);
@@ -1026,6 +1042,34 @@ public class DyldCacheHeader implements StructConverter {
 	}
 
 	/**
+	 * {@return the function variant info address}
+	 */
+	public long getFunctionVariantInfoAddr() {
+		return functionVariantInfoAddr;
+	}
+
+	/**
+	 * {@return the function variant info size}
+	 */
+	public long getFunctionVariantInfoSize() {
+		return functionVariantInfoSize;
+	}
+
+	/**
+	 * {@return the pre-warming data offset}
+	 */
+	public long getPreWarmingDataOffset() {
+		return prewarmingDataOffset;
+	}
+
+	/**
+	 * {@return the pre-warming data size}
+	 */
+	public long getPreWarmingDataSize() {
+		return prewarmingDataSize;
+	}
+
+	/**
 	 * {@return the reader associated with the header}
 	 * 
 	 */
@@ -1052,27 +1096,12 @@ public class DyldCacheHeader implements StructConverter {
 	}
 
 	/**
-	 * Generates a {@link List} of {@link DyldCacheImage}s that are mapped in by this 
-	 * {@link DyldCacheHeader}.  Requires header to have been parsed.
-	 * <p>
-	 * NOTE: A DYLD subcache header may declare an image, but that image may get loaded at an
-	 * address defined by the memory map of a different subcache header.  This method will only 
-	 * return the images that are mapped by "this" header's memory map.
+	 * Gets the {@link List} of {@link DyldCacheImageInfo}s.  Requires header to have been parsed.
 	 * 
-	 * @return A {@link List} of {@link DyldCacheImage}s mapped by this {@link DyldCacheHeader}
+	 * @return The {@link List} of {@link DyldCacheImageInfo}s
 	 */
-	public List<DyldCacheImage> getMappedImages() {
-		// NOTE: A subcache will have an entry for every image, but not every image will be mapped
-		List<DyldCacheImage> images = new ArrayList<>();
-		for (DyldCacheImage imageInfo : imageInfoList) {
-			for (DyldCacheMappingInfo mappingInfo : mappingInfoList) {
-				if (mappingInfo.contains(imageInfo.getAddress(), true)) {
-					images.add(imageInfo);
-					break;
-				}
-			}
-		}
-		return images;
+	public List<DyldCacheImageInfo> getImageInfos() {
+		return imageInfoList;
 	}
 
 	/**
@@ -1096,7 +1125,7 @@ public class DyldCacheHeader implements StructConverter {
 	/**
 	 * Gets the {@link DyldCacheLocalSymbolsInfo}.
 	 * 
-	 * @return The {@link DyldCacheLocalSymbolsInfo}.  Could be be null if it didn't parse. 
+	 * @return The {@link DyldCacheLocalSymbolsInfo}.  Could be null if it didn't parse.
 	 */
 	public DyldCacheLocalSymbolsInfo getLocalSymbolsInfo() {
 		return localSymbolsInfo;
@@ -1213,6 +1242,10 @@ public class DyldCacheHeader implements StructConverter {
 		addHeaderField(struct, QWORD, "dynamicDataMaxSize", "maximum size of space reserved from dynamic data");
 		addHeaderField(struct, DWORD, "tproMappingsOffset", "file offset to first dyld_cache_tpro_mapping_info");
 		addHeaderField(struct, DWORD, "tproMappingsCount", "number of dyld_cache_tpro_mapping_info entries");
+		addHeaderField(struct, QWORD, "functionVariantInfoAddr", "(unslid) address of dyld_cache_function_variant_info");
+		addHeaderField(struct, QWORD, "functionVariantInfoSize", "Size of all of the variant information pointed to via the dyld_cache_function_variant_info");
+		addHeaderField(struct, QWORD, "prewarmingDataOffset", "file offset to dyld_prewarming_header");
+		addHeaderField(struct, QWORD, "prewarmingDataSize", "byte size of prewarming data");
 		// @formatter:on
 
 		struct.setCategoryPath(new CategoryPath(MachConstants.DATA_TYPE_CATEGORY));
@@ -1430,7 +1463,7 @@ public class DyldCacheHeader implements StructConverter {
 			for (DyldCacheImageInfo imageInfo : imageInfoList) {
 				Data d = DataUtilities.createData(program, addr, imageInfo.toDataType(), -1,
 					DataUtilities.ClearDataMode.CHECK_FOR_SPACE);
-				program.getListing().setComment(addr, CodeUnit.EOL_COMMENT, imageInfo.getPath());
+				program.getListing().setComment(addr, CommentType.EOL, imageInfo.getPath());
 				addr = addr.add(d.getLength());
 				monitor.checkCancelled();
 				monitor.incrementProgress(1);
@@ -1450,7 +1483,7 @@ public class DyldCacheHeader implements StructConverter {
 			String size = "0x" + Long.toHexString(codeSignatureSize);
 			program.getListing()
 					.setComment(fileOffsetToAddr(codeSignatureOffset, program, space),
-						CodeUnit.PLATE_COMMENT, "Code Signature (" + size + " bytes)");
+						CommentType.PLATE, "Code Signature (" + size + " bytes)");
 			monitor.incrementProgress(1);
 		}
 		catch (IllegalArgumentException e) {
@@ -1550,8 +1583,7 @@ public class DyldCacheHeader implements StructConverter {
 			for (DyldCacheImageTextInfo imageTextInfo : imageTextInfoList) {
 				Data d = DataUtilities.createData(program, addr, imageTextInfo.toDataType(), -1,
 					DataUtilities.ClearDataMode.CHECK_FOR_SPACE);
-				program.getListing()
-						.setComment(addr, CodeUnit.EOL_COMMENT, imageTextInfo.getPath());
+				program.getListing().setComment(addr, CommentType.EOL, imageTextInfo.getPath());
 				addr = addr.add(d.getLength());
 				monitor.checkCancelled();
 				monitor.incrementProgress(1);

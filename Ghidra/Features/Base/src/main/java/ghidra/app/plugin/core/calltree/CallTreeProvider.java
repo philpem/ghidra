@@ -454,7 +454,9 @@ public class CallTreeProvider extends ComponentProviderAdapter {
 		// navigate incoming nodes on selection
 		//
 		navigateIncomingAction =
-			new ToggleDockingAction("Navigation Incoming Location Changes", plugin.getName()) {
+			new ToggleDockingAction("Navigation Incoming Location Changes", plugin.getName(),
+				KeyBindingType.SHARED) {
+
 				@Override
 				public void actionPerformed(ActionContext context) {
 					// handled later as we receive events
@@ -721,7 +723,7 @@ public class CallTreeProvider extends ComponentProviderAdapter {
 		//@formatter:off
 		showNamespaceAction = new ToggleActionBuilder("Show Namespace", plugin.getName())
 			.selected(false)
-			.description("Function nodes will include the funtion namespace when selected")
+			.description("Function nodes will include the function namespace when selected")
 			.helpLocation(new HelpLocation(plugin.getName(), "Call_Tree_Action_Show_Namespaces"))
 			.menuPath("Show Namespace")
 			.onAction(c -> {

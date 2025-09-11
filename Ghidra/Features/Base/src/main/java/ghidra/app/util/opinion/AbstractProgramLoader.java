@@ -35,8 +35,7 @@ import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.*;
 import ghidra.program.model.lang.*;
 import ghidra.program.model.listing.*;
-import ghidra.program.model.mem.InvalidAddressException;
-import ghidra.program.model.mem.MemoryConflictException;
+import ghidra.program.model.mem.*;
 import ghidra.program.model.symbol.*;
 import ghidra.program.util.DefaultLanguageService;
 import ghidra.program.util.GhidraProgramUtilities;
@@ -63,11 +62,10 @@ public abstract class AbstractProgramLoader implements Loader {
 	 * <p>
 	 * Note that when the load completes, the returned {@link Loaded} {@link Program}s are not 
 	 * saved to a project.  That is the responsibility of the caller (see 
-	 * {@link Loaded#save(Project, MessageLog, TaskMonitor)}).
+	 * {@link Loaded#save(TaskMonitor)}).
 	 * <p>
-	 * It is also the responsibility of the caller to release the returned {@link Loaded} 
-	 * {@link Program}s with {@link Loaded#release(Object)} when they are no longer
-	 * needed.
+	 * It is also the responsibility of the caller to close the returned {@link Loaded} 
+	 * {@link Program}s with {@link Loaded#close()} when they are no longer needed.
 	 *
 	 * @param provider The bytes to load.
 	 * @param loadedName A suggested name for the primary {@link Loaded} {@link Program}. 
@@ -135,21 +133,26 @@ public abstract class AbstractProgramLoader implements Loader {
 		try {
 			for (Loaded<Program> loadedProgram : loadedPrograms) {
 				monitor.checkCancelled();
-				Program program = loadedProgram.getDomainObject();
-				applyProcessorLabels(options, program);
-				program.setEventsEnabled(true);
+				Program program = loadedProgram.getDomainObject(this);
+				try {
+					applyProcessorLabels(options, program);
+					program.setEventsEnabled(true);
+				}
+				finally {
+					program.release(this);
+				}
 			}
 
 			// Subclasses can perform custom post-load fix-ups
 			postLoadProgramFixups(loadedPrograms, project, loadSpec, options, messageLog, monitor);
 
-			// Discard unneeded programs
+			// Discard temporary programs
 			Iterator<Loaded<Program>> iter = loadedPrograms.iterator();
 			while (iter.hasNext()) {
 				Loaded<Program> loaded = iter.next();
-				if (loaded.shouldDiscard()) {
+				if (loaded.check(p -> p.isTemporary())) {
 					iter.remove();
-					loaded.release(consumer);
+					loaded.close();
 				}
 			}
 
@@ -158,7 +161,7 @@ public abstract class AbstractProgramLoader implements Loader {
 		}
 		finally {
 			if (!success) {
-				release(loadedPrograms, consumer);
+				loadedPrograms.forEach(Loaded::close);
 			}
 			postLoadCleanup(success);
 		}
@@ -376,7 +379,7 @@ public abstract class AbstractProgramLoader implements Loader {
 			return fsrl.getName();
 		}
 
-		// If the ByteProvider dosn't have have an FSRL, use the given domainFileName
+		// If the ByteProvider doesn't have an FSRL, use the given domainFileName
 		return domainFileName;
 	}
 
@@ -453,6 +456,39 @@ public abstract class AbstractProgramLoader implements Loader {
 	}
 
 	/**
+	 * Adds the {@link MemoryBlock#EXTERNAL_BLOCK_NAME EXERNAL block} to memory, or adds to an
+	 * existing one
+	 * 
+	 * @param program The {@link Program}
+	 * @param size The desired size of the new EXTERNAL block
+	 * @param log The {@link MessageLog}
+	 * @return The {@link Address} of the new (or new piece) of EXTERNAL block
+	 * @throws Exception if there was an issue creating or adding to the EXTERNAL block
+	 */
+	public static Address addExternalBlock(Program program, long size, MessageLog log)
+			throws Exception {
+		Memory mem = program.getMemory();
+		MemoryBlock externalBlock = mem.getBlock(MemoryBlock.EXTERNAL_BLOCK_NAME);
+		Address ret;
+		if (externalBlock != null) {
+			ret = externalBlock.getEnd().add(1);
+			MemoryBlock newBlock =
+				mem.createBlock(externalBlock, MemoryBlock.EXTERNAL_BLOCK_NAME, ret, size);
+			mem.join(externalBlock, newBlock);
+		}
+		else {
+			ret = MachoProgramUtils.getNextAvailableAddress(program);
+			externalBlock =
+				mem.createUninitializedBlock(MemoryBlock.EXTERNAL_BLOCK_NAME, ret, size, false);
+			externalBlock.setWrite(true);
+			externalBlock.setArtificial(true);
+			externalBlock.setComment(
+				"NOTE: This block is artificial and is used to make relocations work correctly");
+		}
+		return ret;
+	}
+
+	/**
 	 * Gets the {@link Loader}'s language service.
 	 * <p>
 	 * The default behavior of this method is to return the {@link DefaultLanguageService}.
@@ -461,18 +497,6 @@ public abstract class AbstractProgramLoader implements Loader {
 	 */
 	protected LanguageService getLanguageService() {
 		return DefaultLanguageService.getLanguageService();
-	}
-
-	/**
-	 * Releases the given consumer from each of the provided {@link Loaded loaded programs}
-	 *
-	 * @param loadedPrograms A list of {@link Loaded loaded programs} which are no longer being used
-	 * @param consumer The consumer that was marking the {@link Program}s as being used
-	 */
-	protected final void release(List<Loaded<Program>> loadedPrograms, Object consumer) {
-		for (Loaded<Program> loadedProgram : loadedPrograms) {
-			loadedProgram.getDomainObject().release(consumer);
-		}
 	}
 
 	private void applyProcessorLabels(List<Option> options, Program program) {

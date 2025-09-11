@@ -21,6 +21,7 @@ import java.util.*;
 import org.apache.commons.lang3.reflect.TypeUtils;
 
 import ghidra.app.plugin.processors.sleigh.SleighLanguage;
+import ghidra.pcode.exec.AnnotatedPcodeUseropLibrary.OpOutput;
 import ghidra.pcode.exec.AnnotatedPcodeUseropLibrary.PcodeUserop;
 import ghidra.pcodeCPort.slghsymbol.UserOpSymbol;
 import ghidra.program.model.pcode.PcodeOp;
@@ -188,6 +189,19 @@ public interface PcodeUseropLibrary<T> {
 		boolean hasSideEffects();
 
 		/**
+		 * Indicates that this userop may modify the decode context.
+		 * 
+		 * <p>
+		 * This means that the userop may set a field in {@code contextreg}, which could thus affect
+		 * how subsequent instructions are decoded. Executors which decode ahead will have to
+		 * consider this effect.
+		 * 
+		 * @return true if this can modify the context.
+		 * @see PcodeUserop#modifiesContext()
+		 */
+		boolean modifiesContext();
+
+		/**
 		 * Indicates whether or not this userop definition produces p-code suitable for inlining in
 		 * place of its invocation.
 		 * 
@@ -205,6 +219,17 @@ public interface PcodeUseropLibrary<T> {
 		 * @see PcodeUserop#canInline()
 		 */
 		boolean canInlinePcode();
+
+		/**
+		 * If this userop is defined as a java callback, get the type of the output
+		 * 
+		 * <p>
+		 * If the method has a {@code @}{@link OpOutput} annotation, this is the type of the output
+		 * parameter. Otherwise, this is the method's return type.
+		 * 
+		 * @return the output type
+		 */
+		Class<?> getOutputType();
 
 		/**
 		 * If this userop is defined as a java callback, get the method

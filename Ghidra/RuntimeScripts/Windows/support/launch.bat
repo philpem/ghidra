@@ -1,3 +1,18 @@
+:: ###
+:: IP: GHIDRA
+::
+:: Licensed under the Apache License, Version 2.0 (the "License");
+:: you may not use this file except in compliance with the License.
+:: You may obtain a copy of the License at
+::
+::      http://www.apache.org/licenses/LICENSE-2.0
+::
+:: Unless required by applicable law or agreed to in writing, software
+:: distributed under the License is distributed on an "AS IS" BASIS,
+:: WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+:: See the License for the specific language governing permissions and
+:: limitations under the License.
+:: ##
 @echo off
 goto continue
 
@@ -127,7 +142,7 @@ echo WARNING: JAVA_HOME environment variable is set to an invalid directory: %JA
 :javaNotFound
 echo.
 echo ERROR: The 'java' command could not be found in your PATH or with JAVA_HOME.
-echo Please refer to the Ghidra Installation Guide's Troubleshooting section.
+echo Please refer to the Getting Started document's Troubleshooting section.
 set ERRORLEVEL=1
 goto exit1
 
@@ -146,7 +161,7 @@ if "%LS_JAVA_HOME%" == "" (
 	if "!LS_JAVA_HOME!" == "" (
 		echo.
 		echo ERROR: Failed to find a supported JDK.
-		echo Please refer to the Ghidra Installation Guide's Troubleshooting section.
+		echo Please refer to the Getting Started document's Troubleshooting section.
 		set ERRORLEVEL=1
 		goto exit1
 	)

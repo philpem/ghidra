@@ -142,7 +142,7 @@ public class ImporterDialog extends DialogComponentProvider {
 	 */
 	public void setDestinationFolder(DomainFolder folder) {
 		destinationFolder = folder;
-		folderNameTextField.setText(destinationFolder.toString());
+		folderNameTextField.setText(destinationFolder.getPathname());
 		validateFormInput();
 	}
 
@@ -266,7 +266,6 @@ public class ImporterDialog extends DialogComponentProvider {
 		Set<Loader> orderedLoaders = new LinkedHashSet<>(loaderMap.keySet()); // maintain order
 		loaderComboBox = new GhidraComboBox<>(orderedLoaders);
 		loaderComboBox.addItemListener(e -> selectedLoaderChanged());
-		loaderComboBox.setEnterKeyForwarding(true);
 		loaderComboBox.getAccessibleContext().setAccessibleName("Loader Choices");
 		loaderComboBox.setRenderer(
 			GComboBoxCellRenderer.createDefaultTextRenderer(loader -> loader.getName()));
@@ -521,7 +520,7 @@ public class ImporterDialog extends DialogComponentProvider {
 		String parentPath = FilenameUtils.getFullPathNoEndSeparator(pathName);
 		String fileOrFolderName = FilenameUtils.getName(pathName);
 		DomainFolder localDestFolder =
-			(parentPath != null) ? ProjectDataUtils.lookupDomainPath(destinationFolder, parentPath)
+			(parentPath != null) ? ProjectDataUtils.getDomainFolder(destinationFolder, parentPath)
 					: destinationFolder;
 		if (localDestFolder != null) {
 			if (isFolder && localDestFolder.getFolder(fileOrFolderName) != null ||

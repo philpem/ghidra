@@ -107,6 +107,10 @@ public class GoRegisterInfo {
 		return stackInitialOffset;
 	}
 
+	public boolean hasAbiInternalParamRegisters() {
+		return !intRegisters.isEmpty() || !floatRegisters.isEmpty();
+	}
+
 	public List<Variable> getDuffzeroParams(Program program) {
 		if (duffzeroDestParam == null) {
 			return List.of();
@@ -161,7 +165,7 @@ public class GoRegisterInfo {
 		if (isIntType(dt) && isIntrinsicSize(dt.getLength())) {
 			return Math.min(maxAlign, dt.getLength());
 		}
-		if (dt instanceof Complex8DataType /* golang complex64 */ ) {
+		if (dt instanceof Complex8DataType /* Go complex64 */ ) {
 			return 4;
 		}
 		if (dt instanceof AbstractFloatDataType) {

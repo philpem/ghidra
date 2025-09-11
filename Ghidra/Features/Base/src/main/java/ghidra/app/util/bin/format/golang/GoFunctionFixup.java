@@ -28,14 +28,12 @@ import ghidra.program.model.listing.*;
 import ghidra.program.model.listing.Function.FunctionUpdateType;
 import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.symbol.SourceType;
-import ghidra.program.model.symbol.Symbol;
-import ghidra.program.model.symbol.SymbolType;
 import ghidra.program.model.symbol.SymbolUtilities;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
 
 /**
- * Utility class that fixes golang function parameter storage using each function's current
+ * Utility class that fixes Go function parameter storage using each function's current
  * parameter list (formal info only) as starting information.
  * 
  * TODO: verify GoFuncData.argsize property against what we calculate here 
@@ -57,7 +55,7 @@ public class GoFunctionFixup {
 		this.newSignature = func.getSignature();
 		this.newCallingConv = null;
 
-		if (isGolangAbi0Func(func)) {
+		if (GoRttiMapper.isAbi0Func(func.getEntryPoint(), program)) {
 			// Some (typically lower level) functions in the binary will be marked with a 
 			// symbol that ends in the string "abi0".  
 			// Throw away all registers and force stack allocation for everything 
@@ -153,7 +151,7 @@ public class GoFunctionFixup {
 			}
 		}
 
-		// For any parameters that were passed as registers, the golang caller pre-allocates
+		// For any parameters that were passed as registers, the Go caller pre-allocates
 		// space on the stack for the parameter value to be used when the register is overwritten.
 		// Ghidra decompilation results are improved if those storage locations are covered
 		// by variables that we create artificially.
@@ -329,20 +327,6 @@ public class GoFunctionFixup {
 				new Varnode(program.getAddressFactory().getStackSpace().getAddress(stackOffset),
 					dt.getLength()));
 		}
-	}
-
-	public static boolean isGolangAbi0Func(Function func) {
-		Address funcAddr = func.getEntryPoint();
-		for (Symbol symbol : func.getProgram().getSymbolTable().getSymbolsAsIterator(funcAddr)) {
-			if (symbol.getSymbolType() == SymbolType.LABEL ||
-				symbol.getSymbolType() == SymbolType.FUNCTION) {
-				String labelName = symbol.getName();
-				if (labelName.endsWith("abi0")) {
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	private boolean isInLocalVarStorageArea(long stackOffset) {

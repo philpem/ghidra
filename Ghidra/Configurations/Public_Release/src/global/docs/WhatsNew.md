@@ -15,17 +15,54 @@ applied Ghidra SRE capabilities to a variety of problems that involve analyzing 
 generating deep insights for NSA analysts who seek a better understanding of potential
 vulnerabilities in networks and systems.
 
-# What's New in Ghidra 11.3
+# What's coming in Ghidra 12.0
+This is a preview of what is coming in the future Ghidra 12.0 release.
+
+**NOTE:** Ghidra Server: The Ghidra 12.0 server is compatible with Ghidra 9.2 and later Ghidra
+clients although the presence of any newer link-files within a repository may not be handled properly
+by client versions prior to 12.0 which lack support for the new storage format.  Ghidra 12.0 clients
+which introduce new link-files into a project will not be able to add such files into version 
+control if connected to older Ghidra Server versions.  
+
+## Project Link Files
+
+Support for link-files within a Ghidra Project has been significantly expanded with this release and
+with it a new file storage type has been introduced which can create some incompatibilities if projects
+and repositories containing such files are used by older version of Ghidra or the Ghidra Server.
+
+Previously only external folder and file links were supported through the use of a Ghidra URL.
+With 12.0 the ability to establish internal folder and file links has been introduced.  The new
+storage format avoids the use of a database and relies only on a light-weight property file.  Internal
+project links also allow for either absolute or relative links.  Due to the fact that Ghidra allows 
+a folder or file to have the same pathname, some ambiguities can result.  It is highly recommended that
+the use of conflicting folder and file pathnames be avoided.
+
+The use of internally linked folders and files allows batch import processing to more accurately
+reflect the native file-system and its use of symbolic links which allow for the same content to
+be referenced by multiple paths.  Allowing this within a Ghidra project can avoid the potential for
+importing content multiple times with the different paths and simply import once with additional 
+link-files which reference it.  How best to leverage links very much depends on the end-user's 
+needs and project file management preferences.  Special care must be taken when defining or 
+traversing link-files to avoid external and circular references.
+
+Additional Ghidra API methods have been provided or refined on the following classes to leverage 
+link-files: `DomainFolder`, `DomainFile`, `LinkFile`, `LinkHandler`, `DomainFileFilter`, 
+`DomainFileIterator`, etc.
+
+...TO BE CONTINUED...  
+
+
+# What's New in Ghidra 11.4
 This release includes new features, enhancements, performance improvements, quite a few bug fixes,
 and many pull-request contributions. Thanks to all those who have contributed their time, thoughts,
 and code. The Ghidra user community thanks you too!
 	
 ### The not-so-fine print: Please Read!
-Ghidra 11.3 is fully backward compatible with project data from previous releases. However, programs
-and data type archives which are created or modified in 11.3 will not be usable by an earlier Ghidra
+Ghidra 11.4 is fully backward compatible with project data from previous releases. However, programs
+and data type archives which are created or modified in 11.4 will not be usable by an earlier Ghidra
 version.
 
-**IMPORTANT:** Ghidra 11.3 requires at minimum JDK 21 to run.
+**IMPORTANT:** Ghidra 11.4 requires at minimum JDK 21 to run.
 
 **IMPORTANT:** To use the Debugger or do a full source distribution build, you will need Python3
 (3.9 to 3.13 supported) installed on your system.
@@ -38,7 +75,7 @@ causing a full logout, check if your xorg-server has been updated to at least th
 **NOTE:** Each build distribution will include native components (e.g., decompiler) for at least one
 platform (e.g., Windows x86-64). If you have another platform that is not included in the build
 distribution, you can build native components for your platform directly from the distribution.
-See the *Installation Guide* for additional information. Users running with older shared libraries
+See the *Getting Started* document for additional information. Users running with older shared libraries
 and operating systems (e.g., CentOS 7.x) may also run into compatibility errors when launching 
 native executables such as the Decompiler and GNU Demangler which may necessitate a rebuild of 
 native components.
@@ -59,111 +96,80 @@ process that will provide better results than prior Ghidra versions.  You might 
 fresh import of any program you will continue to reverse engineer to see if the latest Ghidra 
 provides better results.
 
-## PyGhidra
-The PyGhidra Python library, originally developed by the Department of Defense Cyber Crime Center 
-(DC3) under the name *Pyhidra*, is a Python library that provides direct access to the Ghidra API 
-within a native CPython 3 interpreter using JPype. PyGhidra contains some conveniences for setting 
-up analysis on a given sample and running a Ghidra script locally. It also contains a Ghidra plugin 
-to allow the use of CPython 3 from the Ghidra GUI.
 
-To launch Ghidra in PyGhidra mode, run `./support/pyghidra` (or `support\pyghidra.bat`). See the
-*"PyGhidra Mode"* section of the *Installation Guide* and `Ghidra/Features/PyGhidra/README.html`
-for more information.
+## Search
 
-## Visual Studio Code
-Ghidra 11.2 introduced a `VSCodeProjectScript.java` GhidraScript to assist in setting up Visual Studio Code
-project folders for Ghidra module development and debugging. This GhidraScript has been replaced in 
-Ghidra 11.3 by 2 new actions, accessible from a *CodeBrowser* tool:
-+ *Tools -> Create VSCode Module Project...*
-+ "*Edit Script with Visual Studio Code*" button in the Script Manager
+A new "Search and Replace" feature allows searching for string patterns in a wide variety
+of Ghidra elements and replacing that text with a different text sequence. Using this feature, many different
+Ghidra elements can be renamed all at once including labels, functions, name-spaces, parameters, data-types,
+field names, and enum values. This feature also supports regular expressions (including capture groups).
+After initiating a search and replace, a results table is displayed with a list of items that match the
+search. From this table, the replace actions can be applied in bulk or individually, one item at a time
+as they are reviewed.
 
-The "*Create VSCode Module Project...*" action provides the same capability as the old
-`VSCodeProjectScript.java` GhidraScript, creating a Visual Studio Code project folder that contains a
-skeleton module which can be used to build a variety of different Ghidra extension points
-(Plugins, Analyzers, Loaders, etc). Launchers are also provided to run and debug the module in
-Ghidra, as well as a Gradle task to export the module as a distributable Ghidra extension zip file.
+## Taint Engine Support
 
-The "*Edit Script with Visual Studio Code*" button in the Script Manager enables quick editing and
-debugging of the selected script in a Visual Studio Code workspace that is automatically created
-behind the scenes in Ghidra's user settings directory. This provides a much snappier and modern
-alternative to Eclipse, while maintaining all of the core fuctionality you would expect from an IDE
-(auto complete, hover, navigation, etc).
+Extended support for using taint engines, particularly CTADL (https://github.com/sandialabs/ctadl)
+and AngryGhidra (https://github.com/Nalen98/AngryGhidra), from the decompiler. Allows users to mark
+pcode varnodes as sources and sinks, displaying paths from sources to sinks as both address selections
+in the disassembly and token selections in the decompiler.
 
-Ghidra will do its best to automatically locate your Visual Studio Code installation, but if cannot
-find it, it can be set via the Front-End GUI at *Edit -> Tool Options -> Visual Studio Code
-Integration*.
+## Dockerized Ghidra
+
+A new capability to build a docker image that demonstrates Ghidra's various entrypoint executions for `headless`,
+`ghidra-server`, `bsim-server`, `bsim`, `pyghidra`, and `gui` within the docker container has been included. The Docker
+image can be used as is, or can be tailored to your workflow needs.   Configuration such as the base
+image (linux distro), additional packages, and more is possible using Docker.
+
+See the `docker/README.md` for information about building a docker image for Ghidra and running within the Ghidra container. 
+
+
+## Binary Formats
+
++ New loaders for the a.out and OMF-51 binary file formats.
++ Support for Mach-O "re-exports".
++ New ability to load Mach-O binaries directly from a Universal Binary without needing to open the File System Browser.
++ DWARF will now load external debug files during analysis as is done for PDB files.
 
 ## Debugger
-The old "IN-VM" and "GADP" launchers and connectors have been removed, as their replacement
-TraceRmi-based implementations have been satisfactorily completed. On that same note, the entire API
-and supporting code base for IN-VM and GADP connectors have been removed.
 
-We've begun to explore more kernel-level debugging. Our lldb connector can now debug the macOS 
-kernel, and our dbgeng connector can now debug a Windows kernel running in a VM via eXDI.
+There have been numerous improvements, extensions for new targets, better launching and configuration, and bug fixes to the debugger.
 
-## Emulator
-We have introduced a new accelerated p-code emulator that uses Jit-in-Time translation (JIT). 
-This is *not* currently integrated in the UI but is available for scripting and plugin developers. 
-Its implementation is named `JitPcodeEmulator`, and it's a near drop-in replacement for `PcodeEmulator`. 
-See its javadoc for usage and implementation details. The JIT emulator is very new, so there may 
-still be many bugs.
+## Analysis Speed
 
-## Source File Information
-Source file and line information can now be added to Ghidra using a Program's SourceFileManager. 
-The DWARF, PDB, and Go analyzers now record this information by default. Source information can also
-be added programmatically; see the example scripts in the *SourceMapping* script category. 
-Source information can be viewed in the *"Source Map"* Listing Field or the `SourceFilesTablePlugin`, 
-which is accessible from the Code Browser via *Window -> Source Files and Transforms*.
+Constant and Stack analysis time has been greatly decreased through algorithm improvements and better threading.  There has been additional
+work to loosen locking of the program database where possible.  By locking only when necessary, multiple threads can better analyze the program
+and interaction with the GUI during analysis should be more responsive.
 
-The *"View Source..."* Listing action, enabled on addresses with source file information, opens a 
-source file at the correct line in either Eclipse or Visual Studio Code (there is a *"Source Files 
-and Transforms"* tool option to determine the viewer). The SourceFilesTablePlugin can be used to 
-modify the source file paths stored in the SourceFileManager before sending them to Eclipse or 
-Visual Studio Code.
+## Golang
 
-## Function Graph
-The Function Graph has had a number of improvements:
-+ Added new *"Flow Chart"* layouts
-+ Position of the satellite view can be configured
-+ Ctrl-Space toggles between the Listing and the Function Graph (starting fully zoomed in vs. fully
-  zoomed out is controlled by a Function Graph option)
+Golang binary analysis analysis has been improved.
++ Analysis has been improved to model closures, interface methods, and generic functions more accurately.
++ Function signatures for core golang library functions are automatically applied.
++ Decompilation results are improved by filtering some verbose golang garbage collection function logic.
++ Addressed finding the Golang bootstrap information in stripped PE binaries.
 
-## String Translation and Text Search
-+ String translation has an additional translator available using the LibreTranslate service.
-  The LibreTranslate project (currently hosted at libretranslate.com) is an independent project
-  that provides an open source translation package that can be self-hosted, meaning you can translate
-  strings without sending them to a second party to translate, using an existing LibreTranslate server.
-  For more information search for LibreTranslate in the online Ghidra help pages.
-  **NOTE:** The LibreTranslate plugin is not enabled by default, and is added in the 
-  *File -> Configure* menu.
+## BSim
 
-+ The ability to search the text of all decompiled functions has been added.  Decompilation during
-  search occurs on the fly, so the latest decompilation results of all functions are used for the
-  search.  The search can take some time depending on the number and size of functions in your binary.
-  The new action can be found at *Search -> Decompiled Text...*.
+PostgreSQL for BSim has been updated to version 15.13 and the JDBC driver to 42.7.6.  This resolves issues with building PostgreSQL
+server on newer releases of Linux and compiler toolchains which compile with -std=c23 option by default.  In addition,
+building of PostgreSQL for linux_arm_64 and mac_arm_64 based platforms is supported.
+
++ BSim is now installed in the default Codebrowser tool.
++ Function names now update in BSim search results overview if the name is changed elsewhere in Ghidra.
 
 ## Processors
-+ The x86 EVEX instruction write and read masking has been implemented for all AVX-512 instructions.
-  The handling of the mask is necessary as semantics are added for individual AVX-512 instructions.
-+ TI_MSP430 decompilation has been improved through numerous changes to the processor's compiler
-  specifications file.
-+ Corrected ARM VFPv2 instructions which were not disassembling correctly.
 
-## Other Improvements 
-+ Much of Ghidra's standalone documentation has been modernized to the Markdown format. Generated 
-  HTML versions are provided alongside the Markdown files for convenience. Converting all relevant
-  documents to Markdown remains an ongoing process.  **NOTE:** There are no plans to convert the
-  internal Ghidra help system to Markdown, as the Java Help library does not support it.
-+ Libraries can now be loaded into an already-imported program with the *File -> Load Libraries...*
-  action.
-+ The CParser macro pre-processing will now halt on *"#error"* directives.  This change had a ripple
-  effect and uncovered a myriad of bugs which have been addressed.  In addition, the interim parsing
-  output has been improved to allow easier diagnosis when problems in parsing occur due to incorrect
-  define values or other header file issues.
-+ Finally, a new `CreateUEFIGDTArchivesScript.java` parsing script has been added to parse UEFI header files
-  available from `github.com/tianocore/edk2`.  Using a script vice released pre-parsed GDT files allows the
-  end user to parse the correct version with a configuration fitting their needs.
++ Enhanced support for the x86 AVX-512 processor extension with additional instruction support - including the BF16, FP16 and VNNI extensions.
++ Implemented many AARCH64 Neon instruction semantics to improve decompilation.
++ Upgraded pcodetest framework scripts to python3 and improved command-line options.
+
+## Other Improvements
+ + Many calling conventions for various processors/compilers have been improved using the more flexible decompiler rules 
+ when the data types for parameters and return values are known.
+ + Upgraded many 3rd party dependencies to address potential bugs and CVE's, including jars for Bouncy Castle,
+ Apache Commons Compress, Apache Commons Lang3, Apache Commons IO, protobuf, and JUnit.
 
 ## Additional Bug Fixes and Enhancements
 Numerous other new features, improvements, and bug fixes are fully listed in the 
-[Change History](ChangeHistory.html) file.
+[Change History](ChangeHistory.md) file.

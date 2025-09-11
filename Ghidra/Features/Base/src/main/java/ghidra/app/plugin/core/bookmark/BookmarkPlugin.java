@@ -202,7 +202,7 @@ public class BookmarkPlugin extends ProgramPlugin implements PopupActionProvider
 	 */
 	public void filterBookmarks() {
 		FilterDialog d = new FilterDialog(provider, currentProgram);
-		tool.showDialog(d, provider);
+		tool.showDialog(d, provider.getComponent());
 		provider.contextChanged();
 	}
 
@@ -282,9 +282,7 @@ public class BookmarkPlugin extends ProgramPlugin implements PopupActionProvider
 	}
 
 	private void disposeAllBookmarkers() {
-		Iterator<BookmarkNavigator> it = bookmarkNavigators.values().iterator();
-		while (it.hasNext()) {
-			BookmarkNavigator nav = it.next();
+		for (BookmarkNavigator nav : bookmarkNavigators.values()) {
 			nav.dispose();
 		}
 		bookmarkNavigators.clear();
@@ -300,12 +298,16 @@ public class BookmarkPlugin extends ProgramPlugin implements PopupActionProvider
 		if (type == null) {
 			return null;
 		}
+
 		String typeString = type.getTypeString();
 		BookmarkNavigator nav = bookmarkNavigators.get(typeString);
-		if (nav == null) {
-			nav = new BookmarkNavigator(markerService, currentProgram.getBookmarkManager(), type);
-			bookmarkNavigators.put(typeString, nav);
+		if (nav != null) {
+			return nav;
 		}
+
+		BookmarkManager bookmarkManager = currentProgram.getBookmarkManager();
+		nav = new BookmarkNavigator(markerService, bookmarkManager, type);
+		bookmarkNavigators.put(typeString, nav);
 		return nav;
 	}
 
@@ -624,9 +626,8 @@ public class BookmarkPlugin extends ProgramPlugin implements PopupActionProvider
 				types.add(type);
 			}
 			else {
-				Iterator<String> it = bookmarkNavigators.keySet().iterator();
-				while (it.hasNext()) {
-					types.add(it.next());
+				for (String element : bookmarkNavigators.keySet()) {
+					types.add(element);
 				}
 			}
 			updateMgr.update();
@@ -655,9 +656,7 @@ public class BookmarkPlugin extends ProgramPlugin implements PopupActionProvider
 				running = true;
 			}
 			try {
-				Iterator<String> it = myTypes.iterator();
-				while (it.hasNext()) {
-					String type = it.next();
+				for (String type : myTypes) {
 					updateNav(type);
 				}
 			}

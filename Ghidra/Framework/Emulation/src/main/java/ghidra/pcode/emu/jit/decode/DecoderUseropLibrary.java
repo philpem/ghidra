@@ -119,8 +119,18 @@ public class DecoderUseropLibrary extends AnnotatedPcodeUseropLibrary<Object> {
 		}
 
 		@Override
+		public boolean modifiesContext() {
+			return rtOp.modifiesContext();
+		}
+
+		@Override
 		public boolean canInlinePcode() {
 			return rtOp.canInlinePcode();
+		}
+
+		@Override
+		public Class<?> getOutputType() {
+			return rtOp.getOutputType();
 		}
 
 		@Override
