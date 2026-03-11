@@ -15,7 +15,7 @@
 ##
 import sys
 import contextlib
-from typing import Union, TYPE_CHECKING, Tuple, List, Callable, Any, Optional
+from typing import Union, TYPE_CHECKING, Tuple, List, Callable, Generator, Any, Optional
 
 from pyghidra.converters import *  # pylint: disable=wildcard-import, unused-wildcard-import
 
@@ -61,7 +61,7 @@ def open_project(
         path: Union[str, Path],
         name: str,
         create: bool = False
-) -> "Project": # type: ignore
+) -> "Project":
     """
     Opens the Ghidra project at the given location, optionally creating it if it doesn't exist.
 
@@ -97,7 +97,7 @@ def open_filesystem(
     
     service = FileSystemService.getInstance()
     fsrl = service.getLocalFS().getLocalFSRL(File(path))
-    fs = service.openFileSystemContainer(fsrl, monitor())
+    fs = service.openFileSystemContainer(fsrl, task_monitor())
     if fs is None:
         raise ValueError(f'"{fsrl}" is not a supported GFileSystem!')
     return fs
@@ -121,7 +121,7 @@ def consume_program(
         object was provided, the same consumer object is returned. Otherwise, a new consumer object
         is created and returned.
     :raises FileNotFoundError: If the path does not exist in the project.
-    :raises TypeError: If the path in the project exists but is not a Program.
+    :raises pyghidra.ProgramTypeError: If the path in the project exists but is not a Program.
     """
     from ghidra.program.model.listing import Program
     from java.lang import Object # type:ignore @UnresolvedImport
@@ -131,18 +131,18 @@ def consume_program(
     df = project_data.getFile(path)
     if df is None:
         raise FileNotFoundError(f'"{path}" does not exist in the Project')
-    dobj = df.getDomainObject(consumer, True, False, monitor())
+    dobj = df.getDomainObject(consumer, True, False, task_monitor())
     program_cls = Program.class_
     if not program_cls.isAssignableFrom(dobj.getClass()):
         dobj.release(consumer)
-        raise TypeError(f'"{path}" exists but is not a Program')
+        raise ProgramTypeError(f'"{path}" exists but is not a Program')
     return dobj, consumer
 
 @contextlib.contextmanager
 def program_context(
         project: "Project", 
         path: Union[str, Path],
-    ) -> "Program":
+    ) -> Generator["Program", None, None]:
     """
     Gets the Ghidra program from the given project with the given project path. The returned
     program's resource cleanup is performed by a context manager.
@@ -151,7 +151,7 @@ def program_context(
     :param path: The project path of the program (should start with "/").
     :return: The Ghidra program.
     :raises FileNotFoundError: If the path does not exist in the project.
-    :raises TypeError: If the path in the project exists but is not a Program.
+    :raises pyghidra.ProgramTypeError: If the path in the project exists but is not a Program.
     """
     program, consumer = consume_program(project, path)    
     try:
@@ -174,7 +174,7 @@ def analyze(
     from ghidra.app.plugin.core.analysis import AutoAnalysisManager
     
     if monitor is None:
-        monitor = monitor()
+        monitor = task_monitor()
         
     with transaction(program, "Analyze"):
         GhidraScriptUtil.acquireBundleHostReference()
@@ -236,7 +236,7 @@ def ghidra_script(
         controls = ScriptControls(
             PrintWriter(stdout_string_writer, True),
             PrintWriter(stderr_string_writer, True),
-            monitor()
+            task_monitor()
         )
         script.setScriptArgs(script_args)
         script.execute(state, controls)
@@ -256,7 +256,7 @@ def ghidra_script(
 def transaction(
         program: "Program",
         description: str = "Unnamed Transaction"
-    ):
+    ) -> Generator[int, None, None]:
     """
     Creates a context for running a Ghidra transaction.
 
@@ -270,6 +270,7 @@ def transaction(
         yield transaction_id
     except:
         success = False
+        raise
     finally:
         program.endTransaction(transaction_id, success)
 
@@ -280,6 +281,8 @@ def analysis_properties(program: "Program") -> "Options":
     :return: the Ghidra "Program.ANALYSIS_PROPERTIES" options.
     """
     from ghidra.program.model.listing import Program
+    from ghidra.app.plugin.core.analysis import AutoAnalysisManager
+    AutoAnalysisManager.getAnalysisManager(program).initializeOptions()
     return program.getOptions(Program.ANALYSIS_PROPERTIES)
 
 def program_info(program: "Program") -> "Options":
@@ -300,19 +303,22 @@ def program_loader() -> "ProgramLoader.Builder":
     from ghidra.app.util.importer import ProgramLoader
     return ProgramLoader.builder()
 
-def monitor(
+def task_monitor(
         timeout: Optional[int] = None
-    ) -> "PyGhidraTaskMonitor":
+    ) -> "TaskMonitor":
     """
-    Convenience function to get a "PyGhidraTaskMonitor" object.
+    Convenience function to get a "TaskMonitor" object.
 
     :param timeout: An optional number of seconds to wait before canceling the monitor.
-    :return: A "PyGhidraTaskMonitor"  object.
+    :return: A "TaskMonitor" object.
     """
+    from ghidra.util.task import TaskMonitor
     from ghidra.pyghidra import PyGhidraTaskMonitor
     from jpype.types import JInt
-    t = None if timeout is None else JInt(timeout)
-    return PyGhidraTaskMonitor(t, None)
+    if timeout is None:
+        return TaskMonitor.DUMMY
+    else:
+        return PyGhidraTaskMonitor(JInt(timeout), None)
 
 def walk_project(
         project: "Project",
@@ -359,7 +365,11 @@ def walk_programs(
             with program_context(project, file.getPathname()) as program:
                 if program_filter(file, program):
                     callback(file, program)
-        except TypeError:
-            pass # skip over non-programs
+        except ProgramTypeError:
+            pass # skip over non-programs 
     
     walk_project(project, process, start=start)
+    
+class ProgramTypeError(TypeError):
+    """Custom exception for when a Program was expected but not received."""
+    pass

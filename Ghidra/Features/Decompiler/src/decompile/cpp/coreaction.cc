@@ -18,6 +18,7 @@
 #include "double.hh"
 #include "subflow.hh"
 #include "constseq.hh"
+#include "bitfield.hh"
 
 namespace ghidra {
 
@@ -1540,7 +1541,7 @@ void ActionFuncLink::funcLinkOutput(FuncCallSpecs *fc,Funcdata &data)
     Datatype *outtype = outparam->getType();
     if (outtype->getMetatype() != TYPE_VOID) {
       int4 sz = outparam->getSize();
-      if (sz == 1 && outtype->getMetatype() == TYPE_BOOL && data.isTypeRecoveryOn())
+      if (outtype->getMetatype() == TYPE_BOOL && data.isTypeRecoveryOn())
 	data.opMarkCalculatedBool(callop);
       Address addr = outparam->getAddress();
       if (addr.getSpace()->getType() == IPTR_SPACEBASE) {
@@ -2349,6 +2350,7 @@ int4 ActionDefaultParams::apply(Funcdata &data)
 void ActionSetCasts::checkPointerIssues(PcodeOp *op,Varnode *vn,Funcdata &data)
 
 {
+  if (op->doesSpecialPrinting()) return;
   Datatype *ptrtype = op->getIn(1)->getHighTypeReadFacing(op);
   int4 valsize = vn->getSize();
   if ((ptrtype->getMetatype()!=TYPE_PTR)|| (((TypePointer *)ptrtype)->getPtrTo()->getSize() != valsize)) {
@@ -2485,8 +2487,9 @@ bool ActionSetCasts::isOpIdentical(Datatype *ct1,Datatype *ct2)
 /// \param op is the given PcodeOp
 /// \param slot is index of the input slot being read
 /// \param data is the containing function
+/// \param castStrategy is used to determine if the cast is still necessary after resolution
 /// \return 1 if a PTRSUB is inserted, 0 otherwise
-int4 ActionSetCasts::resolveUnion(PcodeOp *op,int4 slot,Funcdata &data)
+int4 ActionSetCasts::resolveUnion(PcodeOp *op,int4 slot,Funcdata &data,CastStrategy *castStrategy)
 
 {
   Varnode *vn = op->getIn(slot);
@@ -2498,9 +2501,13 @@ int4 ActionSetCasts::resolveUnion(PcodeOp *op,int4 slot,Funcdata &data)
     dt->resolveInFlow(op, slot);	// Last chance to resolve data-type based on flow
   const ResolvedUnion *resUnion = data.getUnionField(dt, op,slot);
   if (resUnion != (ResolvedUnion*)0 && resUnion->getFieldNum() >= 0) {
-    // Insert specific placeholder indicating which field is accessed
     if (dt->getMetatype() == TYPE_PTR) {
-      PcodeOp *ptrsub = insertPtrsubZero(op,slot,resUnion->getDatatype(),data);
+      // Test if a cast is still needed even after resolution
+      Datatype *reqtype = vn->getTypeReadFacing(op);
+      if (castStrategy->castStandard(reqtype, resUnion->getDatatype(), true, true) != (Datatype *)0)
+	return 0;	// If cast still needed, don't do the resolve
+      // Insert specific placeholder indicating which field is accessed
+      PcodeOp *ptrsub = insertPtrsubZero(op,slot,reqtype,data);
       data.setUnionField(dt, ptrsub,-1,*resUnion);			// Attach the resolution to the PTRSUB
     }
     else if (vn->isImplied()) {
@@ -2751,7 +2758,7 @@ int4 ActionSetCasts::apply(Funcdata &data)
       }
       // Do input casts first, as output may depend on input
       for(int4 i=0;i<op->numInput();++i) {
-	count += resolveUnion(op, i, data);
+	count += resolveUnion(op, i, data, castStrategy);
 	count += castInput(op,i,data,castStrategy);
       }
       if (opc == CPUI_LOAD) {
@@ -3057,6 +3064,11 @@ int4 ActionMarkExplicit::baseExplicit(Varnode *vn,int4 maxref)
     return -1;
   }
   if (vn->hasNoDescend()) return -1;	// Must have at least one descendant
+  if (def->code() == CPUI_INSERT) {
+    PcodeOp *storeOp = def->getOut()->loneDescend();
+    if (storeOp == (PcodeOp *)0 || storeOp->code() != CPUI_STORE)
+      return -1;		// INSERT output is explicit unless it is immediately used by STORE
+  }
 
   if (def->code() == CPUI_PTRSUB) { // A dereference
     Varnode *basevn = def->getIn(0);
@@ -3698,6 +3710,9 @@ void ActionDeadCode::propagateConsumed(vector<Varnode *> &worklist)
       if (sz > sizeof(uintb)) {	// If there exists bits beyond the precision of the consume field
 	if (sa >= 8*sizeof(uintb))
 	  a = ~((uintb)0);	// Make sure we assume one bits where we shift in unrepresented bits
+	else if (sa == 0) {
+	  a = outc;
+	}
 	else
 	  a = (outc >> sa) ^ ( (~((uintb)0)) << (8*sizeof(uintb)-sa));
 	sz = 8*sz -sa;
@@ -3758,10 +3773,11 @@ void ActionDeadCode::propagateConsumed(vector<Varnode *> &worklist)
     pushConsumed(b,op->getIn(2), worklist);
     pushConsumed(b,op->getIn(3), worklist);
     break;
-  case CPUI_EXTRACT:
+  case CPUI_ZPULL:
+  case CPUI_SPULL:
     a = 1;
     a <<= (int4)op->getIn(2)->getOffset();
-    a -= 1;	// Extract mask
+    a -= 1;	// Pull mask
     a &= outc;	// Consumed bits of mask
     a <<= (int4)op->getIn(1)->getOffset();
     pushConsumed(a,op->getIn(0),worklist);
@@ -5420,7 +5436,7 @@ void ActionDatabase::buildDefaultGroups(void)
 			    "deadcode", "typerecovery", "stackptrflow",
 			    "blockrecovery", "stackvars", "deadcontrolflow", "switchnorm",
 			    "cleanup", "splitcopy", "splitpointer", "merge", "dynamic", "casts", "analysis",
-			    "fixateglobals", "fixateproto", "constsequence",
+			    "fixateglobals", "fixateproto", "constsequence", "bitfields",
 			    "segment", "returnsplit", "nodejoin", "doubleload", "doubleprecis",
 			    "unreachable", "subvar", "floatprecision",
 			    "conditionalexe", "" };
@@ -5703,6 +5719,12 @@ void ActionDatabase::universalAction(Architecture *conf)
     actcleanup->addRule( new RuleSplitStore("splitpointer") );
     actcleanup->addRule( new RuleStringCopy("constsequence"));
     actcleanup->addRule( new RuleStringStore("constsequence"));
+    actcleanup->addRule( new RuleBitFieldStore("bitfields"));
+    actcleanup->addRule( new RuleBitFieldOut("bitfields"));
+    actcleanup->addRule( new RuleBitFieldLoad("bitfields"));
+    actcleanup->addRule( new RuleBitFieldIn("bitfields"));
+    actcleanup->addRule( new RulePullAbsorb("bitfields"));
+    actcleanup->addRule( new RuleInsertAbsorb("bitfields"));
   }
   act->addAction( actcleanup );
 

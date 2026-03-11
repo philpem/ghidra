@@ -131,7 +131,7 @@ class UnionDB extends CompositeDB implements UnionInternal {
 
 		if (validateAlignAndNotify) {
 			dataType = resolve(dataType);
-			checkAncestry(dataType);
+			DataTypeUtilities.checkAncestry(this, dataType);
 		}
 
 		length = getPreferredComponentLength(dataType, length);
@@ -169,7 +169,7 @@ class UnionDB extends CompositeDB implements UnionInternal {
 			dataType = adjustBitField(dataType);
 
 			dataType = resolve(dataType);
-			checkAncestry(dataType);
+			DataTypeUtilities.checkAncestry(this, dataType);
 
 			getComputedAlignment(true); // ensure previous alignment has been stored
 
@@ -336,12 +336,14 @@ class UnionDB extends CompositeDB implements UnionInternal {
 	void doReplaceWith(UnionInternal union, boolean notify)
 			throws DataTypeDependencyException, IOException {
 
+		int oldAlignment = getAlignment();
+		int oldLength = unionLength;
+
 		// pre-resolved component types to catch dependency issues early
 		DataTypeComponent[] otherComponents = union.getComponents();
 		DataType[] resolvedDts = new DataType[otherComponents.length];
 		for (int i = 0; i < otherComponents.length; i++) {
 			resolvedDts[i] = doCheckedResolve(otherComponents[i].getDataType());
-			checkAncestry(resolvedDts[i]);
 		}
 
 		for (DataTypeComponentDB dtc : components) {
@@ -359,13 +361,21 @@ class UnionDB extends CompositeDB implements UnionInternal {
 			doAdd(resolvedDts[i], dtc.getLength(), dtc.getFieldName(), dtc.getComment(), false);
 		}
 
-		record.setString(CompositeDBAdapter.COMPOSITE_COMMENT_COL, union.getDescription());
-		compositeAdapter.updateRecord(record, false);
+		repack(false, false);
 
-		repack(false, false); // updates timestamp
+		record.setString(CompositeDBAdapter.COMPOSITE_COMMENT_COL, union.getDescription());
+		compositeAdapter.updateRecord(record, true); // updates timestamp
 
 		if (notify) {
-			notifySizeChanged(false); // assume size and/or alignment changed
+			if (unionLength != oldLength) {
+				notifySizeChanged(false);
+			}
+			else if (unionAlignment != oldAlignment) {
+				notifyAlignmentChanged(false);
+			}
+			else {
+				dataMgr.dataTypeChanged(this, false);
+			}
 		}
 
 		if (pointerPostResolveRequired) {
@@ -524,16 +534,15 @@ class UnionDB extends CompositeDB implements UnionInternal {
 
 	@Override
 	public void dataTypeAlignmentChanged(DataType dt) {
-		if (!isPackingEnabled()) {
+		if (deleting) {
 			return;
-		}
-		if (dt instanceof BitFieldDataType) {
-			return; // unsupported
 		}
 		lock.acquire();
 		try {
 			checkDeleted();
-			repack(true, true);
+			if (isPackingEnabled()) {
+				repack(true, true);
+			}
 		}
 		finally {
 			lock.release();
@@ -542,6 +551,9 @@ class UnionDB extends CompositeDB implements UnionInternal {
 
 	@Override
 	public void dataTypeSizeChanged(DataType dt) {
+		if (deleting) {
+			return;
+		}
 		if (dt instanceof BitFieldDataType) {
 			return; // unsupported
 		}
@@ -708,6 +720,9 @@ class UnionDB extends CompositeDB implements UnionInternal {
 
 	@Override
 	public void dataTypeDeleted(DataType dt) {
+		if (deleting) {
+			return;
+		}
 		lock.acquire();
 		try {
 			checkDeleted();
@@ -824,9 +839,10 @@ class UnionDB extends CompositeDB implements UnionInternal {
 
 	@Override
 	public void dataTypeReplaced(DataType oldDt, DataType newDt) {
-		if (oldDt == this) {
+		if (deleting) {
 			return;
 		}
+		DataTypeUtilities.checkValidReplacement(oldDt, newDt);
 		lock.acquire();
 		try {
 			checkDeleted();
@@ -834,7 +850,7 @@ class UnionDB extends CompositeDB implements UnionInternal {
 			try {
 				replacementDt = validateDataType(replacementDt); // blocks DEFAULT use
 				replacementDt = replacementDt.clone(dataMgr);
-				checkAncestry(replacementDt);
+				DataTypeUtilities.checkAncestry(this, replacementDt);
 			}
 			catch (Exception e) {
 				replacementDt = Undefined1DataType.dataType;
@@ -872,22 +888,6 @@ class UnionDB extends CompositeDB implements UnionInternal {
 	@Override
 	public void dataTypeNameChanged(DataType dt, String oldName) {
 		// ignored
-	}
-
-	@Override
-	public boolean dependsOn(DataType dt) {
-		lock.acquire();
-		try {
-			checkIsValid();
-			if (getNumComponents() == 1) {
-				DataTypeComponent dtc = getComponent(0);
-				return dtc.getDataType().dependsOn(dt);
-			}
-			return false;
-		}
-		finally {
-			lock.release();
-		}
 	}
 
 	@Override

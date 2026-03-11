@@ -267,7 +267,7 @@ public class HeadlessAnalyzer {
 			throw new MalformedURLException("Unsupported repository URL: " + ghidraURL);
 		}
 
-		if (GhidraURL.isLocalProjectURL(ghidraURL)) {
+		if (GhidraURL.isLocalURL(ghidraURL)) {
 			Msg.error(this,
 				"Ghidra URL command form does not supported local project URLs (ghidra:/path...)");
 			return;
@@ -303,8 +303,8 @@ public class HeadlessAnalyzer {
 			}
 		}
 
-		List<String> parsedScriptPaths = parseScriptPaths(options.scriptPaths);
-		GhidraScriptUtil.initialize(new BundleHost(), parsedScriptPaths);
+		BundleHost bundleHost = GhidraScriptUtil.acquireBundleHostReference();
+		bundleHost.add(parseScriptPaths(options.scriptPaths), true, true);
 		try {
 			showConfiguredScriptPaths();
 			compileScripts();
@@ -365,7 +365,7 @@ public class HeadlessAnalyzer {
 			throw new IOException(e); // unexpected
 		}
 		finally {
-			GhidraScriptUtil.dispose();
+			GhidraScriptUtil.releaseBundleHostReference();
 		}
 	}
 
@@ -418,8 +418,8 @@ public class HeadlessAnalyzer {
 			}
 		}
 
-		List<String> parsedScriptPaths = parseScriptPaths(options.scriptPaths);
-		GhidraScriptUtil.initialize(new BundleHost(), parsedScriptPaths);
+		BundleHost bundleHost = GhidraScriptUtil.acquireBundleHostReference();
+		bundleHost.add(parseScriptPaths(options.scriptPaths), true, true);
 		try {
 			showConfiguredScriptPaths();
 			compileScripts();
@@ -471,7 +471,7 @@ public class HeadlessAnalyzer {
 			}
 		}
 		finally {
-			GhidraScriptUtil.dispose();
+			GhidraScriptUtil.releaseBundleHostReference();
 		}
 	}
 
@@ -693,20 +693,18 @@ public class HeadlessAnalyzer {
 		}
 	}
 
-	private List<String> parseScriptPaths(List<String> scriptPaths) {
+	private List<ResourceFile> parseScriptPaths(List<String> scriptPaths) {
 		if (scriptPaths == null) {
-			return null;
+			return List.of();
 		}
-		List<String> parsedScriptPaths = new ArrayList<>();
+		List<ResourceFile> parsedScriptPaths = new ArrayList<>();
 		for (String path : scriptPaths) {
 			ResourceFile pathFile = Path.fromPathString(path);
-			String absPath = pathFile.getAbsolutePath();
 			if (pathFile.exists()) {
-				parsedScriptPaths.add(absPath);
+				parsedScriptPaths.add(pathFile);
 			}
 			else {
-
-				Msg.warn(this, "REPORT: Could not find -scriptPath entry, skipping: " + absPath);
+				Msg.warn(this, "REPORT: Could not find -scriptPath entry, skipping: " + pathFile);
 			}
 		}
 		return parsedScriptPaths;
@@ -884,6 +882,14 @@ public class HeadlessAnalyzer {
 			for (Pair<String, String[]> scriptPair : scriptsList) {
 				scriptName = scriptPair.first;
 				String[] scriptArgs = scriptPair.second;
+
+				StringBuilder buf = new StringBuilder();
+				for (String arg : scriptArgs) {
+					buf.append("'");
+					buf.append(arg);
+					buf.append("' ");
+				}
+				Msg.info(this, "REPORT: Execute script: " + scriptName + " " + buf.toString());
 
 				// For .class files, there is no ResourceFile mapping. Need to load from the
 				// stored 'classLoaderForDotClassScripts'
@@ -1603,8 +1609,8 @@ public class HeadlessAnalyzer {
 				if (!loaded.check(Program::isTemporary)) {
 					try {
 						DomainFile domainFile = loaded.save(TaskMonitor.DUMMY);
-						Msg.info(this, String.format("REPORT: Save succeeded for: %s (%s)",
-							loaded, domainFile));
+						Msg.info(this, String.format("REPORT: Save succeeded for: %s (%s)", loaded,
+							domainFile));
 					}
 					catch (IOException e) {
 						Msg.info(this, "REPORT: Save failed for: " + loaded);
@@ -1802,10 +1808,7 @@ public class HeadlessAnalyzer {
 		try {
 			tempProject = new HeadlessProject(getProjectManager(), locator);
 		}
-		catch (NotOwnerException e) {
-			throw new IOException(e);
-		}
-		catch (LockException e) {
+		catch (NotFoundException | NotOwnerException | LockException e) {
 			throw new IOException(e);
 		}
 
@@ -1846,7 +1849,7 @@ public class HeadlessAnalyzer {
 	private static class HeadlessProject extends DefaultProject {
 
 		HeadlessProject(HeadlessGhidraProjectManager projectManager, ProjectLocator projectLocator)
-				throws NotOwnerException, LockException, IOException {
+				throws NotFoundException, NotOwnerException, LockException, IOException {
 			super(projectManager, projectLocator, false);
 			AppInfo.setActiveProject(this);
 		}

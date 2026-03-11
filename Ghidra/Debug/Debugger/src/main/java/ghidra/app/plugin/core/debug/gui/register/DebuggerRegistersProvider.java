@@ -35,6 +35,7 @@ import docking.*;
 import docking.action.*;
 import docking.action.builder.ActionBuilder;
 import docking.actions.PopupActionProvider;
+import docking.widgets.AbstractGCellRenderer;
 import docking.widgets.table.*;
 import docking.widgets.table.ColumnSortState.SortDirection;
 import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
@@ -141,11 +142,11 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 
 	protected enum RegisterTableColumns
 		implements EnumeratedTableColumn<RegisterTableColumns, RegisterRow> {
-		FAV("Fav", 1, Boolean.class, RegisterRow::isFavorite, RegisterRow::setFavorite, //
-				r -> true, SortDirection.DESCENDING),
+		FAV("Fav", 1, Boolean.class, RegisterRow::isFavorite, RegisterRow::setFavorite, r -> true,
+				SortDirection.DESCENDING),
 		NUMBER("#", 1, Integer.class, RegisterRow::getNumber),
 		NAME("Name", 40, String.class, RegisterRow::getName),
-		VALUE("Value", 100, BigInteger.class, RegisterRow::getValue, RegisterRow::setValue, //
+		VALUE("Value", 100, BigInteger.class, RegisterRow::getValue, RegisterRow::setValue,
 				RegisterRow::isValueEditable, SortDirection.ASCENDING) {
 			private static final RegisterValueCellRenderer RENDERER =
 				new RegisterValueCellRenderer();
@@ -162,10 +163,11 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 				return DEFS;
 			}
 		},
-		TYPE("Type", 40, DataType.class, RegisterRow::getDataType, RegisterRow::setDataType, //
+		TYPE("Type", 40, DataType.class, RegisterRow::getDataType, RegisterRow::setDataType,
 				r -> true, SortDirection.ASCENDING),
-		REPR("Repr", 100, String.class, RegisterRow::getRepresentation, RegisterRow::setRepresentation, //
-				RegisterRow::isRepresentationEditable, SortDirection.ASCENDING);
+		REPR("Repr", 100, String.class, RegisterRow::getRepresentation,
+				RegisterRow::setRepresentation, RegisterRow::isRepresentationEditable,
+				SortDirection.ASCENDING);
 
 		private final String header;
 		private final int width;
@@ -332,7 +334,7 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 			 * It's possible an "undo" or other transaction rollback will cause the current thread
 			 * to be replaced by another object. If that's the case, we need to adjust our
 			 * coordinates.
-			 * 
+			 * <p>
 			 * If that adjustment does not otherwise cause the table to update, we have to fire that
 			 * event, since the register values may have changed, esp., if this "restored" event is
 			 * the result of many events being coalesced.
@@ -410,27 +412,32 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 		}
 	}
 
+	public static void applyStateColors(AbstractGCellRenderer renderer,
+			GTableCellRenderingData data, Predicate<RegisterRow> isChanged) {
+		RegisterRow row = (RegisterRow) data.getRowObject();
+		if (!row.isKnown()) {
+			if (data.isSelected()) {
+				renderer.setForeground(COLOR_FOREGROUND_STALE_SEL);
+			}
+			else {
+				renderer.setForeground(COLOR_FOREGROUND_STALE);
+			}
+		}
+		else if (isChanged.test(row)) {
+			if (data.isSelected()) {
+				renderer.setForeground(COLOR_FOREGROUND_CHANGED_SEL);
+			}
+			else {
+				renderer.setForeground(COLOR_FOREGROUND_CHANGED);
+			}
+		}
+	}
+
 	static class RegisterValueCellRenderer extends HexDefaultGColumnRenderer<BigInteger> {
 		@Override
 		public final Component getTableCellRendererComponent(GTableCellRenderingData data) {
 			super.getTableCellRendererComponent(data);
-			RegisterRow row = (RegisterRow) data.getRowObject();
-			if (!row.isKnown()) {
-				if (data.isSelected()) {
-					setForeground(COLOR_FOREGROUND_STALE_SEL);
-				}
-				else {
-					setForeground(COLOR_FOREGROUND_STALE);
-				}
-			}
-			else if (row.isChanged()) {
-				if (data.isSelected()) {
-					setForeground(COLOR_FOREGROUND_CHANGED_SEL);
-				}
-				else {
-					setForeground(COLOR_FOREGROUND_CHANGED);
-				}
-			}
+			applyStateColors(this, data, RegisterRow::isChanged);
 			return this;
 		}
 	}
@@ -499,7 +506,7 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 	final RegistersTableModel regsTableModel;
 	GhidraTable regsTable;
 	GhidraTableFilterPanel<RegisterRow> regsFilterPanel;
-	Map<Register, RegisterRow> regMap = new HashMap<>();
+	Map<Register, RegisterRow> regMap = new IdentityHashMap<>();
 
 	private final DebuggerAvailableRegistersDialog availableRegsDialog;
 
@@ -826,7 +833,7 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 
 		prepareRegisterSpace();
 		recomputeViewKnown();
-		loadRegistersAndValues();
+		loadRegistersAndValues(previous.getLanguage() != current.getLanguage());
 		contextChanged();
 		return true;
 	}
@@ -984,7 +991,6 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 
 	/**
 	 * Ensure the register space exists and has been populated from register object values.
-	 * 
 	 * <p>
 	 * TODO: I wish this were not necessary. Maybe I should create the space when register object
 	 * values are populated.
@@ -1054,7 +1060,7 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 		if (previous.getThread() == null || current.getThread() == null) {
 			return false;
 		}
-		if (previous.getPlatform().getLanguage() != current.getPlatform().getLanguage()) {
+		if (previous.getLanguage() != current.getLanguage()) {
 			return false;
 		}
 		if (!isRegisterKnown(register)) {
@@ -1080,10 +1086,8 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 
 	/**
 	 * Gather general registers, the program counter, and the stack pointer
-	 * 
 	 * <p>
 	 * This excludes the context register
-	 * 
 	 * <p>
 	 * TODO: Several pspec files need adjustment to clean up "common registers"
 	 * 
@@ -1102,9 +1106,6 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 			result.add(pc);
 		}
 		for (Register reg : lang.getRegisters()) {
-			//if (reg.getGroup() != null) {
-			//	continue;
-			//}
 			if (reg.isProcessorContext()) {
 				continue;
 			}
@@ -1234,7 +1235,7 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 		Set<Register> selection = getSelectionFor(current.getPlatform());
 		selection.clear();
 		selection.addAll(new TreeSet<>(selectedRegisters));
-		return loadRegistersAndValues();
+		return loadRegistersAndValues(false);
 	}
 
 	public RegisterRow getRegisterRow(Register register) {
@@ -1275,11 +1276,15 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 		regsTableModel.addAll(toAdd);
 	}
 
-	protected CompletableFuture<Void> loadRegistersAndValues() {
+	protected CompletableFuture<Void> loadRegistersAndValues(boolean changeLanguage) {
 		if (current.getThread() == null) {
 			regsTableModel.clear();
 			regMap.clear();
 			return AsyncUtils.nil();
+		}
+		if (changeLanguage) {
+			regsTableModel.clear();
+			regMap.clear();
 		}
 		Set<Register> selected = getSelectionFor(current.getPlatform());
 		displaySelectedRegisters(selected);
@@ -1326,6 +1331,10 @@ public class DebuggerRegistersProvider extends ComponentProviderAdapter
 
 	public DebuggerCoordinates getCurrent() {
 		return current;
+	}
+
+	public DebuggerCoordinates getPrevious() {
+		return previous;
 	}
 
 	private void reportError(String title, String message, Throwable ex) {

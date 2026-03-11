@@ -127,6 +127,9 @@ public abstract class AbstractLongOffsetPcodeExecutorStatePiece<A, T, S>
 	 */
 	protected T getUnique(long offset, int size, Reason reason, PcodeStateCallbacks cb) {
 		S s = getForSpace(uniqueSpace, false);
+		if (s == null) {
+			return getFromNullSpace(size, reason, cb);
+		}
 		return getFromSpace(s, offset, size, reason, cb);
 	}
 
@@ -256,7 +259,7 @@ public abstract class AbstractLongOffsetPcodeExecutorStatePiece<A, T, S>
 		S s = getForSpace(space, false);
 		if (s == null) {
 			AddressSet set = PcodeStateCallbacks.rngSet(space, offset, size);
-			if (set.equals(cb.readUninitialized(this, set))) {
+			if (set.equals(cb.readUninitialized(this, set, reason))) {
 				return getFromNullSpace(size, reason, cb);
 			}
 			s = getForSpace(space, false);

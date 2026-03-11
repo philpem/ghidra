@@ -76,13 +76,11 @@ import ghidra.util.task.UnknownProgressWrappingTaskMonitor;
  * </ul>
  */
 public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContext {
-	public static final GoVerRange SUPPORTED_VERSIONS = GoVerRange.parse("1.15-1.25");
+	public static final GoVerRange SUPPORTED_VERSIONS = GoVerRange.parse("1.15-1.26");
 
 	private static final List<String> SYMBOL_SEARCH_PREFIXES = List.of("", "_" /* macho symbols */);
 	private static final List<String> SECTION_PREFIXES =
 		List.of("." /* ELF */, "__" /* macho sections */);
-
-	private static final String FAILED_FLAG = "FAILED TO FIND GOLANG BINARY";
 
 	/**
 	 * Returns a shared {@link GoRttiMapper} for the specified program, or null if the binary
@@ -102,10 +100,6 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 	 * 
 	 */
 	public static GoRttiMapper getSharedGoBinary(Program program, TaskMonitor monitor) {
-		if (TransientProgramProperties.hasProperty(program, FAILED_FLAG)) {
-			// don't try to do any work if we've failed earlier
-			return null;
-		}
 		GoRttiMapper goBinary = TransientProgramProperties.getProperty(program, GoRttiMapper.class,
 			TransientProgramProperties.SCOPE.ANALYSIS_SESSION, GoRttiMapper.class, () -> {
 				// cached instance not found, create new instance
@@ -127,10 +121,6 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 					Msg.error(GoRttiMapper.class, "Failed to read Go info", e);
 					logAnalyzerMsg(program, e.getMessage());
 				}
-
-				// this sets the failed flag
-				TransientProgramProperties.getProperty(program, FAILED_FLAG,
-					TransientProgramProperties.SCOPE.PROGRAM, Boolean.class, () -> true);
 
 				return null;
 			});
@@ -155,12 +145,18 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 	 * @return new {@link GoRttiMapper}, or null if basic Go information is not found in the
 	 * binary
 	 * @throws BootstrapInfoException if it is a Go binary and has an unsupported or
-	 * unparseable version number or if there was a missing Go bootstrap .gdt file
+	 * unparseable version number or if Go bootstrap info was missing
 	 * @throws IOException if there was an error in the Ghidra Go RTTI reading logic 
 	 */
 	public static GoRttiMapper getGoBinary(Program program, TaskMonitor monitor)
 			throws BootstrapInfoException, IOException {
 		GoBuildInfo buildInfo = GoBuildInfo.fromProgram(program);
+		if (buildInfo == null || buildInfo.getGoVer().isInvalid()) {
+			GoBuildInfo fallbackBI = GoBuildInfo.fromFallbackInfo(program);
+			if (fallbackBI != null) {
+				buildInfo = fallbackBI;
+			}
+		}
 		if (buildInfo == null) {
 			// probably not a Go binary
 			return null;
@@ -326,9 +322,9 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 	 * @param goVer version of Go
 	 * @param apiSnapshot json func signatures and data types 
 	 * @throws IOException if error linking a structure mapped structure to its matching
-	 * ghidra structure, which is a programming error or a corrupted bootstrap gdt
-	 * @throws BootstrapInfoException if there is no matching bootstrap gdt for this specific
-	 * type of Go binary
+	 * ghidra structure, which is a programming error or invalid bootstrap info
+	 * @throws BootstrapInfoException if there is no bootstrap info for this specific
+	 * type and version of Go binary
 	 */
 	public GoRttiMapper(Program program, GoBuildInfo buildInfo, int ptrSize, GoVer goVer,
 			GoApiSnapshot apiSnapshot) throws IOException, BootstrapInfoException {
@@ -550,14 +546,6 @@ public class GoRttiMapper extends DataTypeMapper implements DataTypeMapperContex
 			}
 		}
 		return false;
-	}
-
-	public String getCallingConventionFor(GoFuncData func) {
-		// TODO: this logic needs work.  Currently we are not strongly declaring functions
-		// as abi0.
-		return defaultCCName != null && !isAbi0Func(func.getFuncAddress(), program)
-				? defaultCCName
-				: null;
 	}
 
 	/**

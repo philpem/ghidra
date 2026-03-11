@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
+import generic.hash.HashUtilities;
 import ghidra.app.plugin.processors.generic.MemoryBlockDefinition;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
@@ -36,7 +37,6 @@ import ghidra.program.model.mem.*;
 import ghidra.program.model.symbol.*;
 import ghidra.program.util.DefaultLanguageService;
 import ghidra.program.util.GhidraProgramUtilities;
-import ghidra.util.HashUtilities;
 import ghidra.util.MD5Utilities;
 import ghidra.util.exception.*;
 import ghidra.util.task.TaskMonitor;
@@ -325,9 +325,8 @@ public abstract class AbstractProgramLoader implements Loader {
 			prog.setExecutableFormat(executableFormatName);
 		}
 		FSRL fsrl = provider.getFSRL();
-		String md5 = (fsrl != null && fsrl.getMD5() != null)
-				? fsrl.getMD5()
-				: computeBinaryMD5(provider);
+		String md5 =
+			(fsrl != null && fsrl.getMD5() != null) ? fsrl.getMD5() : computeBinaryMD5(provider);
 		if (fsrl != null) {
 			if (fsrl.getMD5() == null) {
 				fsrl = fsrl.withMD5(md5);
@@ -361,11 +360,7 @@ public abstract class AbstractProgramLoader implements Loader {
 		try {
 			LanguageCompilerSpecPair pair = settings.loadSpec().getLanguageCompilerSpec();
 			Language language = getLanguageService().getLanguage(pair.languageID);
-			MemoryBlockDefinition[] defaultMemoryBlocks = language.getDefaultMemoryBlocks();
-			if (defaultMemoryBlocks == null) {
-				return;
-			}
-			for (MemoryBlockDefinition blockDef : defaultMemoryBlocks) {
+			for (MemoryBlockDefinition blockDef : language.getDefaultMemoryBlocks()) {
 				try {
 					blockDef.createBlock(program);
 				}
@@ -427,39 +422,6 @@ public abstract class AbstractProgramLoader implements Loader {
 	}
 
 	/**
-	 * Adds the {@link MemoryBlock#EXTERNAL_BLOCK_NAME EXERNAL block} to memory, or adds to an
-	 * existing one
-	 * 
-	 * @param program The {@link Program}
-	 * @param size The desired size of the new EXTERNAL block
-	 * @param log The {@link MessageLog}
-	 * @return The {@link Address} of the new (or new piece) of EXTERNAL block
-	 * @throws Exception if there was an issue creating or adding to the EXTERNAL block
-	 */
-	public static Address addExternalBlock(Program program, long size, MessageLog log)
-			throws Exception {
-		Memory mem = program.getMemory();
-		MemoryBlock externalBlock = mem.getBlock(MemoryBlock.EXTERNAL_BLOCK_NAME);
-		Address ret;
-		if (externalBlock != null) {
-			ret = externalBlock.getEnd().add(1);
-			MemoryBlock newBlock =
-				mem.createBlock(externalBlock, MemoryBlock.EXTERNAL_BLOCK_NAME, ret, size);
-			mem.join(externalBlock, newBlock);
-		}
-		else {
-			ret = MachoProgramUtils.getNextAvailableAddress(program);
-			externalBlock =
-				mem.createUninitializedBlock(MemoryBlock.EXTERNAL_BLOCK_NAME, ret, size, false);
-			externalBlock.setWrite(true);
-			externalBlock.setArtificial(true);
-			externalBlock.setComment(
-				"NOTE: This block is artificial and is used to make relocations work correctly");
-		}
-		return ret;
-	}
-
-	/**
 	 * Gets the {@link Loader}'s language service.
 	 * <p>
 	 * The default behavior of this method is to return the {@link DefaultLanguageService}.
@@ -468,6 +430,19 @@ public abstract class AbstractProgramLoader implements Loader {
 	 */
 	protected LanguageService getLanguageService() {
 		return DefaultLanguageService.getLanguageService();
+	}
+
+	private AddressSetView getProcessorDefinedMemoryBlockAddresses(Program program) {
+		AddressSet blockAddrSet = new AddressSet();
+		Memory memory = program.getMemory();
+		Language language = program.getLanguage();
+		for (MemoryBlockDefinition defaultMemoryBlockDef : language.getDefaultMemoryBlocks()) {
+			MemoryBlock block = memory.getBlock(defaultMemoryBlockDef.getBlockName());
+			if (block != null) {
+				blockAddrSet.add(block.getAddressRange());
+			}
+		}
+		return blockAddrSet;
 	}
 
 	private void applyProcessorLabels(List<Option> options, Program program) {
@@ -482,15 +457,25 @@ public abstract class AbstractProgramLoader implements Loader {
 					createSymbol(program, reg.getName(), addr, null, false, true, true);
 				}
 			}
-			// optionally create default symbols defined by pspec
-			if (shouldApplyProcessorLabels(options)) {
-				boolean anchorSymbols = shouldAnchorSymbols(options);
-				List<AddressLabelInfo> labels = lang.getDefaultSymbols();
-				for (AddressLabelInfo info : labels) {
-					createSymbol(program, info.getLabel(), info.getAddress(), info.getDescription(), info.isEntry(),
-						info.isPrimary(), anchorSymbols);
+
+			// NOTE: pspec defined labels should always be defined if they correspond to a memory
+			// block defined by the pspec.
+			boolean applyAllProcessorLabels = shouldApplyProcessorLabels(options);
+			AddressSetView pspecDefinedBlockSet = getProcessorDefinedMemoryBlockAddresses(program);
+			boolean anchorSymbols = shouldAnchorSymbols(options);
+			List<AddressLabelInfo> labels = lang.getDefaultSymbols();
+			for (AddressLabelInfo info : labels) {
+				Address addr = info.getAddress();
+				boolean isRequiredLabel = pspecDefinedBlockSet.contains(addr);
+				if (isRequiredLabel || applyAllProcessorLabels) {
+					// NOTE: Required labels contained within a pspec-defined memory block do not 
+					// need to be pinned/anchored
+					boolean anchor = !isRequiredLabel && anchorSymbols;
+					createSymbol(program, info.getLabel(), info.getAddress(), info.getDescription(),
+						info.isEntry(), info.isPrimary(), anchor);
 				}
 			}
+
 			GhidraProgramUtilities.resetAnalysisFlags(program);
 		}
 		finally {

@@ -129,6 +129,7 @@ public class FrontEndPlugin extends Plugin
 
 	private FrontEndProvider frontEndProvider;
 
+	private ProjectRepoConnectAction repoConnectAction;
 	private ProjectDataCutAction cutAction;
 	private ClearCutAction clearCutAction;
 	private ProjectDataCopyAction copyAction;
@@ -221,6 +222,7 @@ public class FrontEndPlugin extends Plugin
 		String owner = getName();
 
 		// Top of popup menu actions - no group
+		repoConnectAction = new ProjectRepoConnectAction(this, null);
 		openAction = new ProjectDataOpenDefaultToolAction(owner, null);
 		followLinkAction = new ProjectDataFollowLinkAction(this, null);
 		selectRealFileOrFolderAction = new ProjectDataSelectRealFileOrFolderAction(this, null);
@@ -251,6 +253,7 @@ public class FrontEndPlugin extends Plugin
 		groupName = "XRefresh";
 		refreshAction = new ProjectDataRefreshAction(owner, groupName);
 
+		tool.addAction(repoConnectAction);
 		tool.addAction(newFolderAction);
 		tool.addAction(cutAction);
 		tool.addAction(clearCutAction);
@@ -514,25 +517,29 @@ public class FrontEndPlugin extends Plugin
 				// the extension, try to open or create using the extension
 				else if (!create && filename.lastIndexOf(".") > path.lastIndexOf(File.separator)) {
 					// treat opening a file without the ghidra extension as an error
-					Msg.showError(getClass(), tool.getToolFrame(), "Invalid Project File",
+					Msg.showError(this, tool.getToolFrame(), "Invalid Project File",
 						"Cannot open '" + file.getName() + "' as a Ghidra Project");
 					continue;
 				}
-				if (!NamingUtilities.isValidProjectName(filename)) {
-					Msg.showError(getClass(), tool.getToolFrame(), "Invalid Project Name",
-						filename + " is not a valid project name");
-					continue;
-				}
-				Preferences.setProperty(preferenceName, path);
+
 				try {
+					ProjectLocator projectLocator = new ProjectLocator(path, filename);
+
+					Preferences.setProperty(preferenceName, path);
 					Preferences.store();
+
+					return projectLocator;
+				}
+				catch (IllegalArgumentException e) {
+					Msg.showError(this, tool.getToolFrame(), "Invalid Project Name",
+						e.getMessage());
+					continue;
 				}
 				catch (Exception e) {
 					Msg.debug(this,
 						"Unexpected exception storing preferences to" + Preferences.getFilename(),
 						e);
 				}
-				return new ProjectLocator(path, filename);
 			}
 			return null;
 		}

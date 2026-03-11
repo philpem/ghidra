@@ -58,9 +58,12 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 		this.ordinal = ordinal;
 		this.offset = offset;
 		this.length = length;
-		this.fieldName = cleanupFieldName(fieldName);
+		this.fieldName = InternalDataTypeComponent.cleanupFieldName(fieldName);
 		setDataType(dataType);
 		setComment(comment);
+		if (isZeroBitFieldComponent()) {
+			this.length = 0; // previously stored as 1, force to 0
+		}
 	}
 
 	/**
@@ -130,7 +133,7 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 
 	@Override
 	public void setFieldName(String name) throws DuplicateNameException {
-		this.fieldName = cleanupFieldName(name);
+		this.fieldName = InternalDataTypeComponent.cleanupFieldName(name);
 	}
 
 	public static void checkDefaultFieldName(String fieldName) throws DuplicateNameException {
@@ -171,7 +174,7 @@ public class DataTypeComponentImpl implements InternalDataTypeComponent, Seriali
 	 * @param newComment new comment
 	 */
 	void update(String name, DataType newDataType, String newComment) {
-		this.fieldName = cleanupFieldName(name);
+		this.fieldName = InternalDataTypeComponent.cleanupFieldName(name);
 		this.dataType = newDataType;
 		this.comment = StringUtils.isBlank(newComment) ? null : newComment;
 	}
