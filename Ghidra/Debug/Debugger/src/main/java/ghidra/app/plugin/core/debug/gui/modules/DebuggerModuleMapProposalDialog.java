@@ -22,7 +22,6 @@ import java.util.function.Function;
 import javax.swing.table.TableCellEditor;
 
 import docking.widgets.table.*;
-import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
 import ghidra.app.plugin.core.debug.gui.AbstractDebuggerMapProposalDialog;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.debug.api.modules.ModuleMapProposal.ModuleMapEntry;
@@ -128,8 +127,7 @@ public class DebuggerModuleMapProposalDialog
 				return CustomToStringCellRenderer.MONO_ULONG_HEX;
 			}
 		},
-		MEMORIZE("Memorize", Boolean.class, ModuleMapEntry::isMemorize,
-				ModuleMapEntry::setMemorize);
+		MEMORIZE("Memorize", Boolean.class, ModuleMapEntry::isMemorize, ModuleMapEntry::setMemorize);
 
 		private final String header;
 		private final Class<?> cls;
@@ -209,7 +207,7 @@ public class DebuggerModuleMapProposalDialog
 	protected void populateComponents() {
 		super.populateComponents();
 		setPreferredSize(600, 300);
-		table.setRowHeight(BUTTON_SIZE);
+		table.setPreferredRowHeight(BUTTON_SIZE);
 	}
 
 	private void chooseAndSetProgram(ModuleMapEntry entry) {

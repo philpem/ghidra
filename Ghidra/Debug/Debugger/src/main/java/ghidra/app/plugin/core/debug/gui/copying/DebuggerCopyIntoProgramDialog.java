@@ -29,11 +29,10 @@ import javax.swing.table.TableCellEditor;
 import db.Transaction;
 import docking.ReusableDialogComponentProvider;
 import docking.widgets.table.*;
-import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.app.plugin.core.debug.gui.copying.DebuggerCopyPlan.Copier;
 import ghidra.app.services.*;
-import ghidra.app.services.DebuggerStaticMappingService.MappedAddressRange;
+import ghidra.debug.api.modules.MappedAddressRange;
 import ghidra.debug.api.target.Target;
 import ghidra.debug.api.tracemgr.DebuggerCoordinates;
 import ghidra.framework.plugintool.PluginTool;
@@ -177,8 +176,7 @@ public class DebuggerCopyIntoProgramDialog extends ReusableDialogComponentProvid
 		SECTIONS("Sections", String.class, RangeEntry::getSectionNames),
 		SRC_MIN("SrcMin", Address.class, RangeEntry::getSrcMinAddress),
 		SRC_MAX("SrcMax", Address.class, RangeEntry::getSrcMaxAddress),
-		BLOCK("Block", String.class, RangeEntry::getBlockName, RangeEntry::setBlockName,
-				RangeEntry::isCreate),
+		BLOCK("Block", String.class, RangeEntry::getBlockName, RangeEntry::setBlockName, RangeEntry::isCreate),
 		OVERLAY("Overlay", Boolean.class, RangeEntry::isOverlay),
 		DST_MIN("DstMin", Address.class, RangeEntry::getDstMinAddress),
 		DST_MAX("DstMax", Address.class, RangeEntry::getDstMaxAddress);
@@ -471,7 +469,7 @@ public class DebuggerCopyIntoProgramDialog extends ReusableDialogComponentProvid
 		addCancelButton();
 		addResetButton();
 
-		table.setRowHeight(BUTTON_SIZE);
+		table.setPreferredRowHeight(BUTTON_SIZE);
 	}
 
 	protected void addResetButton() {

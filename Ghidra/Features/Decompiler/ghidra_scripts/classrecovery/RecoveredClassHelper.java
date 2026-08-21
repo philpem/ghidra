@@ -465,9 +465,11 @@ public class RecoveredClassHelper {
 					continue;
 				}
 
-				if (calledFunction.isExternal()) {
-					continue;
-				}
+				// TODO: might redo to have separate call maps that do/don't include external
+				// keeping this here for reminder
+//				if (calledFunction.isExternal()) {
+//					continue;
+//				}
 
 				// include the null functions in map so things using map can get accurate count
 				// of number of CALL instructions even if the call reg type
@@ -2327,24 +2329,26 @@ public class RecoveredClassHelper {
 	}
 
 	/**
-	 * Method to make the given function a thiscall
+	 * Method to make the given function a thiscall unless doing so causes an exception in which 
+	 * case it will not be updated
 	 * @param function the given function
-	 * @throws InvalidInputException if issues setting return type
-	 * @throws DuplicateNameException if try to create same symbol name already in namespace
 	 */
-	public void makeFunctionThiscall(Function function)
-			throws InvalidInputException, DuplicateNameException {
+	public void makeFunctionThiscall(Function function) {
 
 		if (function.getCallingConventionName().equals(CompilerSpec.CALLING_CONVENTION_thiscall)) {
 			return;
 		}
 
-		ReturnParameterImpl returnType =
-			new ReturnParameterImpl(function.getSignature().getReturnType(), program);
-
-		function.updateFunction(CompilerSpec.CALLING_CONVENTION_thiscall, returnType,
-			FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, function.getSignatureSource(),
-			function.getParameters());
+		ReturnParameterImpl returnType;
+		try {
+			returnType = new ReturnParameterImpl(function.getSignature().getReturnType(), program);
+			function.updateFunction(CompilerSpec.CALLING_CONVENTION_thiscall, returnType,
+				FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, function.getSignatureSource(),
+				function.getParameters());
+		}
+		catch (InvalidInputException | DuplicateNameException e) {
+			// don't update if there is an issue
+		}
 	}
 
 	/**
@@ -4469,6 +4473,7 @@ public class RecoveredClassHelper {
 			if (vftablePointerDataType == null) {
 				Msg.debug(this,
 					"vftablePointerDataType is null for vftableAddress: " + vftableAddress);
+				continue;
 			}
 
 			DataType vftableDataType = vftablePointerDataType.getDataType();

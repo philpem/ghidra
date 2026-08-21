@@ -314,19 +314,19 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 		return stdout;
 	}
 
-	protected ManagedDomainObject openDomainObject(String path) throws Exception {
+	protected ManagedDomainObject<Trace> openTrace(String path) throws Exception {
 		DomainFile df = env.getProject().getProjectData().getFile(path);
 		assertNotNull(df);
-		return new ManagedDomainObject(df, false, false, monitor);
+		return new ManagedDomainObject<>(df, Trace.class, monitor);
 	}
 
-	protected ManagedDomainObject waitDomainObject(String path) throws Exception {
+	protected ManagedDomainObject<Trace> waitTrace(String path) throws Exception {
 		DomainFile df;
 		long start = System.currentTimeMillis();
 		while (true) {
 			df = env.getProject().getProjectData().getFile(path);
 			if (df != null) {
-				return new ManagedDomainObject(df, false, false, monitor);
+				return new ManagedDomainObject<>(df, Trace.class, monitor);
 			}
 			Thread.sleep(1000);
 			if (System.currentTimeMillis() - start > 30000) {
@@ -337,6 +337,12 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 
 	protected void waitTxDone() {
 		waitFor(() -> tb.trace.getCurrentTransactionInfo() == null);
+	}
+
+	@Test
+	public void testTomlVersionConsistency() throws IOException {
+		List<String> toml = readToml("Debugger-rmi-trace");
+		assertVersionMatchesApplication(parseVersionFromToml(toml));
 	}
 
 	@Test
@@ -367,12 +373,8 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 				print(trace)
 				exit()
 				""".formatted(PREAMBLE, addr));
-		try (ManagedDomainObject obj = openDomainObject("/New Traces/test")) {
-			switch (obj.get()) {
-				case Trace trace -> {
-				}
-				default -> fail("Wrong type");
-			}
+		try (ManagedDomainObject<Trace> obj = openTrace("/New Traces/test")) {
+			// it worked and has the correct type
 		}
 	}
 
@@ -537,8 +539,8 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 
 				exit()
 				""".formatted(PREAMBLE, addr));
-		try (ManagedDomainObject obj = openDomainObject("/New Traces/test")) {
-			Trace trace = (Trace) obj.get();
+		try (ManagedDomainObject<Trace> obj = openTrace("/New Traces/test")) {
+			Trace trace = obj.get();
 			TraceSnapshot snapshot = trace.getTimeManager().getSnapshot(0, false);
 			assertEquals("Test", snapshot.getDescription());
 		}
@@ -556,8 +558,8 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 
 				exit()
 				""".formatted(PREAMBLE, addr));
-		try (ManagedDomainObject obj = openDomainObject("/New Traces/test")) {
-			Trace trace = (Trace) obj.get();
+		try (ManagedDomainObject<Trace> obj = openTrace("/New Traces/test")) {
+			Trace trace = obj.get();
 			TraceSnapshot snapshot = trace.getTimeManager().getSnapshot(10, false);
 			assertEquals("Test", snapshot.getDescription());
 		}
@@ -583,8 +585,8 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 
 		long snap = Long.parseLong(matchOne(out, Pattern.compile("---SNAP:(-?\\d*)---")).group(1));
 		assertThat(snap, Matchers.lessThan(0L));
-		try (ManagedDomainObject obj = openDomainObject("/New Traces/test")) {
-			Trace trace = (Trace) obj.get();
+		try (ManagedDomainObject<Trace> obj = openTrace("/New Traces/test")) {
+			Trace trace = obj.get();
 			TraceSnapshot snapshot = trace.getTimeManager().getSnapshot(snap, false);
 			assertEquals("Test", snapshot.getDescription());
 		}
@@ -607,8 +609,8 @@ public class TraceRmiPythonClientTest extends AbstractGhidraHeadedDebuggerTest {
 
 		long snap = Long.parseLong(matchOne(out, Pattern.compile("---SNAP:(-?\\d*)---")).group(1));
 		assertThat(snap, Matchers.lessThan(0L));
-		try (ManagedDomainObject obj = openDomainObject("/New Traces/test")) {
-			Trace trace = (Trace) obj.get();
+		try (ManagedDomainObject<Trace> obj = openTrace("/New Traces/test")) {
+			Trace trace = obj.get();
 			TraceSnapshot snapshot = trace.getTimeManager().getSnapshot(snap, false);
 			assertEquals("Test", snapshot.getDescription());
 		}

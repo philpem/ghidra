@@ -44,6 +44,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressRangeImpl;
 import ghidra.pty.testutil.DummyProc;
 import ghidra.trace.model.Lifespan;
+import ghidra.trace.model.Trace;
 import ghidra.trace.model.breakpoint.TraceBreakpointKind;
 import ghidra.trace.model.breakpoint.TraceBreakpointKind.TraceBreakpointKindSet;
 import ghidra.trace.model.target.TraceObject;
@@ -150,16 +151,23 @@ public abstract class AbstractDbgEngTraceRmiTest extends AbstractGhidraHeadedDeb
 	public void setupTraceRmi() throws Throwable {
 		traceRmi = addPlugin(tool, TraceRmiPlugin.class);
 
-		try {
-			pythonPath = Paths.get(DummyProc.which("python3"));
-		}
-		catch (RuntimeException e) {
-			pythonPath = Paths.get(DummyProc.which("python"));
-		}
+		pythonPath = getPathToPython();
 
 		assertTrue(pythonPath.toFile().exists());
 		outFile = Files.createTempFile("pydbgout", null);
 		errFile = Files.createTempFile("pydbgerr", null);
+	}
+
+	protected Path getPathToPython() {
+		try {
+			String py3path = DummyProc.which("python3");
+			if (py3path != null && !py3path.contains("msys")) {
+				return Paths.get(py3path);
+			}
+		}
+		catch (RuntimeException e) {
+		}
+		return Paths.get(DummyProc.which("python"));
 	}
 
 	protected void addAllDebuggerPlugins() throws PluginException {
@@ -451,19 +459,19 @@ public abstract class AbstractDbgEngTraceRmiTest extends AbstractGhidraHeadedDeb
 		return new RegDump();
 	}
 
-	protected ManagedDomainObject openDomainObject(String path) throws Exception {
+	protected ManagedDomainObject<Trace> openTrace(String path) throws Exception {
 		DomainFile df = env.getProject().getProjectData().getFile(path);
 		assertNotNull(df);
-		return new ManagedDomainObject(df, false, false, monitor);
+		return new ManagedDomainObject<>(df, Trace.class, monitor);
 	}
 
-	protected ManagedDomainObject waitDomainObject(String path) throws Exception {
+	protected ManagedDomainObject<Trace> waitTrace(String path) throws Exception {
 		DomainFile df;
 		long start = System.currentTimeMillis();
 		while (true) {
 			df = env.getProject().getProjectData().getFile(path);
 			if (df != null) {
-				return new ManagedDomainObject(df, false, false, monitor);
+				return new ManagedDomainObject<>(df, Trace.class, monitor);
 			}
 			Thread.sleep(1000);
 			if (System.currentTimeMillis() - start > 30000) {

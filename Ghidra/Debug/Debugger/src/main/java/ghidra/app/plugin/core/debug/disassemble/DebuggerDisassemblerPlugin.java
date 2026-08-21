@@ -39,6 +39,7 @@ import ghidra.trace.model.*;
 import ghidra.trace.model.guest.TraceGuestPlatform;
 import ghidra.trace.model.guest.TracePlatform;
 import ghidra.trace.model.memory.*;
+import ghidra.trace.model.memory.TraceMemoryOperations.StatePredicate;
 import ghidra.trace.model.program.TraceProgramView;
 import ghidra.util.IntersectionAddressSetView;
 import ghidra.util.UnionAddressSetView;
@@ -159,11 +160,10 @@ public class DebuggerDisassemblerPlugin extends Plugin implements PopupActionPro
 		TraceMemoryManager memoryManager = trace.getMemoryManager();
 		AddressSetView readOnly =
 			memoryManager.getRegionsAddressSetWith(ks, r -> !r.isWrite(ks));
-		AddressSetView everKnown = memoryManager.getAddressesWithState(Lifespan.since(ks),
-			s -> s == TraceMemoryState.KNOWN);
+		AddressSetView everKnown =
+			memoryManager.getAddressesWithState(Lifespan.since(ks), StatePredicate.IS_KNOWN);
 		AddressSetView roEverKnown = new IntersectionAddressSetView(readOnly, everKnown);
-		AddressSetView known =
-			memoryManager.getAddressesWithState(ks, s -> s == TraceMemoryState.KNOWN);
+		AddressSetView known = memoryManager.getAddressesWithState(ks, StatePredicate.IS_KNOWN);
 		AddressSetView disassemblable = new UnionAddressSetView(known, roEverKnown);
 		return disassemblable;
 	}
@@ -171,6 +171,7 @@ public class DebuggerDisassemblerPlugin extends Plugin implements PopupActionPro
 	CurrentPlatformTraceDisassembleAction actionDisassemble;
 	CurrentPlatformTracePatchInstructionAction actionPatchInstruction;
 	TracePatchDataAction actionPatchData;
+	CurrentPlatformTraceAssemblePatchAction actionAssemblePatch;
 
 	public DebuggerDisassemblerPlugin(PluginTool tool) {
 		super(tool);
@@ -187,10 +188,12 @@ public class DebuggerDisassemblerPlugin extends Plugin implements PopupActionPro
 		actionDisassemble = new CurrentPlatformTraceDisassembleAction(this);
 		actionPatchInstruction = new CurrentPlatformTracePatchInstructionAction(this);
 		actionPatchData = new TracePatchDataAction(this);
+		actionAssemblePatch = new CurrentPlatformTraceAssemblePatchAction(this);
 
 		tool.addAction(actionDisassemble);
 		tool.addAction(actionPatchInstruction);
 		tool.addAction(actionPatchData);
+		tool.addAction(actionAssemblePatch);
 	}
 
 	/**
@@ -222,6 +225,7 @@ public class DebuggerDisassemblerPlugin extends Plugin implements PopupActionPro
 		for (LanguageID langID : getAlternativeLanguageIDs(platform.getLanguage())) {
 			result.add(new FixedPlatformTraceDisassembleAction(this, langID, platform));
 			result.add(new FixedPlatformTracePatchInstructionAction(this, langID, platform));
+			result.add(new FixedPlatformTraceAssemblePatchAction(this, langID, platform));
 		}
 	}
 

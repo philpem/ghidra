@@ -23,7 +23,6 @@ import java.util.function.Function;
 import javax.swing.table.TableCellEditor;
 
 import docking.widgets.table.*;
-import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
 import ghidra.app.plugin.core.debug.gui.AbstractDebuggerMapProposalDialog;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.debug.api.modules.RegionMapProposal.RegionMapEntry;
@@ -208,7 +207,7 @@ public class DebuggerRegionMapProposalDialog
 	protected void populateComponents() {
 		super.populateComponents();
 		setPreferredSize(600, 300);
-		table.setRowHeight(BUTTON_SIZE);
+		table.setPreferredRowHeight(BUTTON_SIZE);
 	}
 
 	private void chooseAndSetBlock(RegionMapEntry entry) {

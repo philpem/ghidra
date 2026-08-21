@@ -120,6 +120,9 @@ public class ExtensionUtils {
 		return success;
 	}
 
+	/**
+	 * {@return all installed extensions that are not marked for uninstall}
+	 */
 	public static Set<ExtensionDetails> getActiveInstalledExtensions() {
 		return getAllInstalledExtensions().getActiveExtensions();
 	}
@@ -561,10 +564,16 @@ public class ExtensionUtils {
 
 		log.trace("Unzipping extension from " + file);
 
+		String extName = extension.getName();
+		if (extName.contains("..")) {
+			Msg.error(ExtensionUtils.class, "Invalid extension name; name contains path elements");
+			return false;
+		}
+
 		ApplicationLayout layout = Application.getApplicationLayout();
 		ResourceFile installDir = layout.getExtensionInstallationDirs().get(0);
 		File installDirRoot = installDir.getFile(false);
-		File destinationFolder = new File(installDirRoot, extension.getName());
+		File destinationFolder = new File(installDirRoot, extName);
 		if (hasExistingExtension(destinationFolder, monitor)) {
 			return false;
 		}
@@ -576,11 +585,7 @@ public class ExtensionUtils {
 				monitor.checkCancelled();
 
 				ZipArchiveEntry entry = entries.nextElement();
-				String filePath = installDir + File.separator + entry.getName();
-				File destination = new File(filePath);
-				if (!FileUtilities.isPathContainedWithin(installDirRoot, destination)) {
-					throw new IOException("Zip entry escapes target directory: " + entry.getName());
-				}
+				File destination = FileUtilities.getSecureFile(installDirRoot, entry.getName());
 				if (entry.isDirectory()) {
 					destination.mkdirs();
 				}

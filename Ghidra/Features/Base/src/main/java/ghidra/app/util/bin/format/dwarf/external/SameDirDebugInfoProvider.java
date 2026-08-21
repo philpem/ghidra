@@ -23,6 +23,7 @@ import org.apache.commons.io.FilenameUtils;
 import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+import utilities.util.FileUtilities;
 
 /**
  * A {@link DebugFileProvider} that only looks in the program's original import directory for
@@ -94,7 +95,7 @@ public class SameDirDebugInfoProvider implements DebugFileProvider {
 		if (debugInfo.hasDebugLink()) {
 			// This differs from the LocalDirDebugLinkProvider in that it does NOT recursively search
 			// for the file
-			File debugFile = new File(progDir, debugInfo.getFilename());
+			File debugFile = ensureSafeFilename(debugInfo.getFilename());
 			if (debugFile.isFile()) {
 				int fileCRC = LocalDirDebugLinkProvider.calcCRC(debugFile);
 				if (fileCRC == debugInfo.getCrc()) {
@@ -109,13 +110,21 @@ public class SameDirDebugInfoProvider implements DebugFileProvider {
 		if (debugInfo.hasBuildId()) {
 			// this probe is a w.a.g for what people might do when co-locating a build-id debug
 			// file with the original binary
-			File debugFile = new File(progDir, debugInfo.getBuildId() + ".debug");
+			File debugFile = ensureSafeFilename(debugInfo.getBuildId() + ".debug");
 			if (debugFile.isFile()) {
 				return debugFile;
 			}
 		}
 
 		return null;
+	}
+
+	private File ensureSafeFilename(String filename) throws IOException {
+		File testFile = FileUtilities.getSecureFile(progDir, filename);
+		if (!progDir.equals(testFile.getParentFile())) {
+			throw new IOException("Unsupported path specified in debug file: " + filename);
+		}
+		return testFile;
 	}
 
 }

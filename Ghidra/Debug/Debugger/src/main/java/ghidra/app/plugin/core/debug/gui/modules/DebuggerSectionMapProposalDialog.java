@@ -20,10 +20,9 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import javax.swing.table.*;
+import javax.swing.table.TableCellEditor;
 
 import docking.widgets.table.*;
-import docking.widgets.table.DefaultEnumeratedColumnTableModel.EnumeratedTableColumn;
 import ghidra.app.plugin.core.debug.gui.AbstractDebuggerMapProposalDialog;
 import ghidra.app.plugin.core.debug.gui.DebuggerResources;
 import ghidra.debug.api.modules.SectionMapProposal.SectionMapEntry;
@@ -210,7 +209,7 @@ public class DebuggerSectionMapProposalDialog
 	protected void populateComponents() {
 		super.populateComponents();
 		setPreferredSize(600, 300);
-		table.setRowHeight(BUTTON_SIZE);
+		table.setPreferredRowHeight(BUTTON_SIZE);
 	}
 
 	private void chooseAndSetBlock(SectionMapEntry entry) {

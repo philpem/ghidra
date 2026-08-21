@@ -486,12 +486,7 @@ public class DebuggerLogicalBreakpointServicePlugin extends Plugin
 		}
 
 		protected void forgetAllBreakpoints(RemoveCollector r) {
-			Collection<TraceBreakpointLocation> toForget = new ArrayList<>();
-			for (AddressRange range : trace.getBaseAddressFactory().getAddressSet()) {
-				toForget.addAll(
-					trace.getBreakpointManager().getBreakpointsIntersecting(Lifespan.ALL, range));
-			}
-			for (TraceBreakpointLocation tb : toForget) {
+			for (TraceBreakpointLocation tb : List.copyOf(logicalByBreakpoint.keySet())) {
 				forgetTraceBreakpoint(r, tb);
 			}
 		}
@@ -767,17 +762,15 @@ public class DebuggerLogicalBreakpointServicePlugin extends Plugin
 			 */
 			for (Set<LogicalBreakpointInternal> set : List.copyOf(logicalByAddress.values())) {
 				for (LogicalBreakpointInternal lb : Set.copyOf(set)) {
-					Bookmark pb = lb.getProgramBookmark();
-					if (pb == null) {
-						continue;
-					}
-					if (pb != program.getBookmarkManager().getBookmark(pb.getId())) {
-						forgetProgramBreakpoint(r, pb, false);
-						continue;
-					}
-					if (!lb.getProgramLocation().getByteAddress().equals(pb.getAddress())) {
-						forgetProgramBreakpoint(r, pb, false);
-						continue;
+					for (Bookmark pb : lb.getProgramBookmarksValidOrNot()) {
+						if (pb != program.getBookmarkManager().getBookmark(pb.getId())) {
+							forgetProgramBreakpoint(r, pb, false);
+							continue;
+						}
+						if (!lb.getProgramLocation().getByteAddress().equals(pb.getAddress())) {
+							forgetProgramBreakpoint(r, pb, false);
+							continue;
+						}
 					}
 				}
 			}

@@ -51,6 +51,7 @@ public abstract class AbstractOrdinalSupportLoader extends AbstractLibrarySuppor
 		list.add(Option.newBoolean(ORDINAL_LOOKUP_OPTION_NAME)
 				.value(ORDINAL_LOOKUP_OPTION_DEFAULT)
 				.commandLineArgument(createArg("-ordinalLookup"))
+				.stateKey(Loader.OPTIONS_PROJECT_SAVE_STATE_KEY)
 				.build());
 		return list;
 	}
@@ -96,7 +97,8 @@ public abstract class AbstractOrdinalSupportLoader extends AbstractLibrarySuppor
 				log.appendMsg("Created exports file: " + newExportsFile);
 			}
 			catch (IOException e) {
-				log.appendMsg("Unable to create exports file for " + libFsrl);
+				log.appendMsg(
+					"Unable to create exports file for %s: %s".formatted(libFsrl, e.getMessage()));
 			}
 		}
 		else {
